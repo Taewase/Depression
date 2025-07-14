@@ -1,0 +1,22 @@
+export const questions = [
+  "Do you often have headaches?",
+  "Is your appetite poor?",
+  "Do you sleep badly?",
+  "Are you easily frightened?",
+  "Do your hands shake?",
+  "Do you feel nervous, tense, or worried?",
+  "Is your digestion poor?",
+  "Do you have trouble thinking clearly?",
+  "Do you feel unhappy?",
+  "Do you cry more than usual?",
+  "Do you find it difficult to enjoy your daily activities?",
+  "Do you find it difficult to make decisions?",
+  "Is your daily work suffering?",
+  "Are you unable to play a useful part in life?",
+  "Have you lost interest in things?",
+  "Do you feel that you are a worthless person?",
+  "Has the thought of ending your life been on your mind?",
+  "Do you feel tired all the time?",
+  "Do you have uncomfortable feelings in your stomach?",
+  "Are you easily tired?"
+]; 
