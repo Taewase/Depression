@@ -74,9 +74,7 @@ const Header = ({ onMenuClick }) => {
           <button onClick={toggleTheme} className="text-gray-500 dark:text-slate-200 hover:text-indigo-500 dark:hover:text-indigo-400">
             {theme === 'dark' ? <Sun size={22} /> : <Moon size={22} />}
           </button>
-          <button className="text-gray-500 hover:text-gray-700 dark:text-slate-200 dark:hover:text-slate-100">
-            <Bell size={22} />
-          </button>
+          {/* Removed Bell Notification Icon */}
           
           {/* Profile Dropdown */}
           <div className="relative" ref={profileMenuRef}>
@@ -99,12 +97,18 @@ const Header = ({ onMenuClick }) => {
             {showProfileMenu && (
               <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-2 z-50">
                 <div className="px-4 py-3 border-b border-gray-200 dark:border-slate-700">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {user ? user.name : 'User'}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">
-                    {user ? user.email : 'user@example.com'}
-                  </p>
+                  {user ? (
+                    <>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {user.name}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">
+                        {user.email}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-500 dark:text-slate-400">Not logged in</p>
+                  )}
                 </div>
                 
                 <div className="py-1">

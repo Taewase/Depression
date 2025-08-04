@@ -1,11 +1,12 @@
 const { Pool } = require('pg');
 
 const pool = new Pool({
-  user: 'postgres',
-  host: 'localhost',
-  database: 'depression_system',
-  password: '$1998Mowase', // Use the password you confirmed works
+  user: 'neondb_owner',
+  password: 'npg_X6xJ5mKjgkLw',
+  host: 'ep-plain-fire-ad2oo5x1-pooler.c-2.us-east-1.aws.neon.tech',
   port: 5432,
+  database: 'neondb',
+  ssl: { rejectUnauthorized: false }
 });
 
-module.exports = pool; 
+module.exports = pool;

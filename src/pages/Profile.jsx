@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { User, Mail, Book, Edit, Shield, MapPin, Phone, Calendar, Save, X, Eye, EyeOff, CheckCircle } from 'lucide-react';
 
 const Profile = () => {
-  const { user, isAuthenticated, updateUserProfile } = useAuth();
+  const { user, isAuthenticated, updateUserProfile, changePassword } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -86,17 +86,23 @@ const Profile = () => {
     return Object.keys(newErrors).length === 0;
   };
 
+  // Password strength checker
+  const isStrongPassword = (pwd) => {
+    // At least 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char
+    return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).{8,}$/.test(pwd);
+  };
+
   const validatePasswordForm = () => {
     const newErrors = {};
-    
     if (!passwordData.currentPassword) newErrors.currentPassword = 'Current password is required';
     if (!passwordData.newPassword) newErrors.newPassword = 'New password is required';
-    else if (passwordData.newPassword.length < 6) newErrors.newPassword = 'Password must be at least 6 characters';
+    else if (!isStrongPassword(passwordData.newPassword)) {
+      newErrors.newPassword = 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.';
+    }
     if (!passwordData.confirmPassword) newErrors.confirmPassword = 'Please confirm your password';
     else if (passwordData.newPassword !== passwordData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
-    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -113,15 +119,20 @@ const Profile = () => {
 
   const handleChangePassword = () => {
     if (validatePasswordForm()) {
-      // In a real app, you'd make an API call here
-      console.log('Changing password:', passwordData);
-      setIsChangingPassword(false);
-      setPasswordData({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-      });
-      showNotification('Password changed successfully!');
+      // Call backend to change password
+      changePassword(passwordData.currentPassword, passwordData.newPassword)
+        .then(() => {
+          setIsChangingPassword(false);
+          setPasswordData({
+            currentPassword: '',
+            newPassword: '',
+            confirmPassword: ''
+          });
+          showNotification('Password changed successfully!');
+        })
+        .catch((err) => {
+          setErrors(prev => ({ ...prev, currentPassword: err.message }));
+        });
     }
   };
 

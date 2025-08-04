@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Stethoscope, BookOpen, MessageSquare, User, LogOut, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Stethoscope, BookOpen, MessageSquare, User, LogOut, BarChart3, TrendingUp } from 'lucide-react';
 import { Brain } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -12,6 +12,7 @@ const Sidebar = () => {
     { icon: LayoutDashboard, text: 'Dashboard', path: '/dashboard' },
     { icon: Stethoscope, text: 'Assessment', path: '/dashboard/assessment' },
     { icon: BarChart3, text: 'Results', path: '/results' },
+    { icon: TrendingUp, text: 'Progress Tracker', path: '/progress' },
     { icon: BookOpen, text: 'Resources', path: '/resources' },
     { icon: MessageSquare, text: 'Support', path: '/support' },
     { icon: User, text: 'Profile', path: '/profile' },

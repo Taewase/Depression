@@ -14,8 +14,14 @@ import MainLayout from './components/MainLayout';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import Results from './pages/Results';
+import ProgressTracker from './pages/ProgressTracker';
 import ArticleView from './pages/ArticleView';
 import { useAuth } from './context/AuthContext';
+import AdminDashboard from './admin/AdminDashboard';
+import AdminRoute from './admin/AdminRoute';
+import Users from './admin/Users';
+import AssessmentPage from './admin/AssessmentPage';
+import DemographicsPage from './admin/DemographicsPage';
 
 // Layout for public pages
 const PublicLayout = () => (
@@ -60,7 +66,7 @@ const App = () => {
     return <SplashScreen onComplete={handleSplashComplete} />;
   }
 
-  console.log('Rendering main app, showSplash:', showSplash, 'isAuthenticated:', isAuthenticated);
+
 
   return (
     <Routes>
@@ -77,11 +83,34 @@ const App = () => {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="dashboard/assessment" element={<Assessment />} />
         <Route path="results" element={<Results />} />
+        <Route path="progress" element={<ProgressTracker />} />
         <Route path="resources" element={<Resources />} />
         <Route path="article/:id" element={<ArticleView />} />
         <Route path="support" element={<Support />} />
         <Route path="profile" element={<Profile />} />
       </Route>
+
+      {/* Admin protected routes */}
+      <Route path="admin" element={
+        <AdminRoute>
+          <AdminDashboard />
+        </AdminRoute>
+      } />
+      <Route path="admin/users" element={
+        <AdminRoute>
+          <Users />
+        </AdminRoute>
+      } />
+      <Route path="admin/assessments" element={
+        <AdminRoute>
+          <AssessmentPage />
+        </AdminRoute>
+      } />
+      <Route path="admin/demographics" element={
+        <AdminRoute>
+          <DemographicsPage />
+        </AdminRoute>
+      } />
 
       {/* Fallback route to redirect unhandled paths */}
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,75 +1,88 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const AuthContext = createContext(null);
 
-const mockUser = {
-  name: 'Maiwase Zulu',
-  email: 'maiwasezulu@gmail.com',
-  role: 'Guest',
-  phone: '+1234567890',
-  address: 'Lilongwe, Malawi',
-  joinDate: 'January 2024',
-};
-
-// Mock assessment history
-const mockAssessmentHistory = [
-  {
-    id: 1,
-    date: '2024-01-15',
-    score: 5,
-    level: 'Optimal Wellness',
-    questions: 20,
-    completed: true,
-    recommendations: [
-      'Continue your excellent self-care routine',
-      'Share your wellness strategies with friends',
-      'Consider becoming a peer supporter'
-    ]
-  },
-  {
-    id: 2,
-    date: '2024-01-10',
-    score: 12,
-    level: 'Mindful Attention',
-    questions: 20,
-    completed: true,
-    recommendations: [
-      'Connect with a mental health professional',
-      'Explore stress management techniques',
-      'Build stronger support networks'
-    ]
-  },
-  {
-    id: 3,
-    date: '2024-01-05',
-    score: 8,
-    level: 'Optimal Wellness',
-    questions: 20,
-    completed: true,
-    recommendations: [
-      'Continue your excellent self-care routine',
-      'Schedule quarterly mental health check-ins'
-    ]
-  }
-];
-
-// Mock recent activity
-const mockRecentActivity = [
-  { id: 1, type: 'Assessment', desc: 'Completed mental wellness check', date: '2024-01-15', time: '2:30 PM' },
-  { id: 2, type: 'Resource', desc: 'Read "Coping with Stress" article', date: '2024-01-14', time: '11:45 AM' },
-  { id: 3, type: 'Support', desc: 'Joined peer support group', date: '2024-01-12', time: '3:20 PM' },
-  { id: 4, type: 'Assessment', desc: 'Completed assessment', date: '2024-01-10', time: '1:15 PM' },
-  { id: 5, type: 'Resource', desc: 'Accessed meditation guide', date: '2024-01-08', time: '9:30 AM' },
-];
-
 const API_URL = 'http://localhost:5000';
 
+const fetchAssessmentHistory = async (setAssessmentHistory) => {
+  const token = localStorage.getItem('token');
+  if (!token) return setAssessmentHistory([]);
+  try {
+    const res = await fetch('http://localhost:5000/api/assessment-history', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Failed to fetch assessment history');
+    const data = await res.json();
+    setAssessmentHistory(data);
+  } catch (err) {
+    setAssessmentHistory([]);
+  }
+};
+
+const fetchUserProfile = async (setUser, logout) => {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    setUser(null);
+    return;
+  }
+  try {
+    const res = await fetch(`${API_URL}/profile`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Invalid token');
+    const data = await res.json();
+    setUser(data.user);
+  } catch (err) {
+    // Token is invalid or expired, log out
+    logout();
+  }
+};
+
+// Helper to calculate streak
+const calculateWellnessStreak = (activityList) => {
+  if (!activityList || activityList.length === 0) return 0;
+  // Get unique days with activity
+  const days = Array.from(new Set(activityList.map(a => a.date))).sort((a, b) => new Date(b) - new Date(a));
+  if (days.length === 0) return 0;
+  let streak = 1;
+  let prev = new Date(days[0]);
+  for (let i = 1; i < days.length; i++) {
+    const curr = new Date(days[i]);
+    const diff = (prev - curr) / (1000 * 60 * 60 * 24);
+    if (diff === 1) {
+      streak++;
+      prev = curr;
+    } else {
+      break;
+    }
+  }
+  return streak;
+};
+
 export const AuthProvider = ({ children }) => {
+  // Change password API call
+  const changePassword = async (currentPassword, newPassword) => {
+    const token = localStorage.getItem('token');
+    if (!token) throw new Error('Not authenticated');
+    const res = await fetch(`${API_URL}/change-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || 'Failed to change password');
+    }
+    return await res.json();
+  };
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
-  const [assessmentHistory, setAssessmentHistory] = useState(mockAssessmentHistory);
-  const [recentActivity, setRecentActivity] = useState(mockRecentActivity);
+  const [assessmentHistory, setAssessmentHistory] = useState([]); // Start empty
+  const [recentActivity, setRecentActivity] = useState([]); // Start empty
   const navigate = useNavigate();
 
   // Debug authentication state changes
@@ -89,7 +102,14 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('token', data.token);
       setIsAuthenticated(true);
       setUser(data.user);
-      navigate('/dashboard');
+      await fetchAssessmentHistory(setAssessmentHistory);
+      
+      // Redirect based on user role
+      if (data.user.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       alert('Login failed: ' + err.message);
     }
@@ -99,15 +119,26 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('token');
     setIsAuthenticated(false);
     setUser(null);
+    setAssessmentHistory([]);
+    setRecentActivity([]);
     navigate('/login');
   };
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
-      setIsAuthenticated(true);
-      // Optionally fetch user profile here
+      // Validate token and fetch user profile
+      fetchUserProfile(setUser, logout).then(() => {
+        setIsAuthenticated(true);
+        fetchAssessmentHistory(setAssessmentHistory);
+      });
+    } else {
+      setIsAuthenticated(false);
+      setUser(null);
+      setAssessmentHistory([]);
+      setRecentActivity([]);
     }
+    // eslint-disable-next-line
   }, []);
 
   const updateUserProfile = (updatedData) => {
@@ -118,30 +149,7 @@ export const AuthProvider = ({ children }) => {
     }));
   };
 
-  const addAssessmentResult = (result) => {
-    const newAssessment = {
-      id: Date.now(),
-      date: new Date().toISOString().split('T')[0],
-      score: result.score,
-      level: result.level,
-      questions: 20,
-      completed: true,
-      recommendations: result.recommendations
-    };
-    
-    setAssessmentHistory(prev => [newAssessment, ...prev]);
-    
-    // Add to recent activity
-    const newActivity = {
-      id: Date.now(),
-      type: 'Assessment',
-      desc: `Completed ${result.level} assessment`,
-      date: new Date().toISOString().split('T')[0],
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-    
-    setRecentActivity(prev => [newActivity, ...prev.slice(0, 4)]); // Keep only 5 most recent
-  };
+  // Remove or update addAssessmentResult to not use local mock data
 
   const addActivity = (type, description) => {
     const newActivity = {
@@ -157,17 +165,25 @@ export const AuthProvider = ({ children }) => {
 
   // Calculate dynamic stats
   const getDashboardStats = () => {
-    const completedAssessments = assessmentHistory.filter(a => a.completed).length;
+    const completedAssessments = assessmentHistory.length;
     const lastAssessment = assessmentHistory[0];
-    const lastScore = lastAssessment ? lastAssessment.level : 'No assessments yet';
+    const lastScore = lastAssessment ? lastAssessment.final_class : 'No assessments yet';
+    const lastConfidence = lastAssessment ? lastAssessment.confidence : null;
     const resourcesAccessed = recentActivity.filter(a => a.type === 'Resource').length;
-    
+    const wellnessStreak = calculateWellnessStreak(recentActivity);
     return {
       completedAssessments,
       lastScore,
-      resourcesAccessed
+      lastConfidence,
+      resourcesAccessed,
+      wellnessStreak
     };
   };
+
+  // Memoize fetchAssessmentHistory to prevent infinite re-renders
+  const memoizedFetchAssessmentHistory = useCallback(() => {
+    return fetchAssessmentHistory(setAssessmentHistory);
+  }, []);
 
   const value = {
     isAuthenticated,
@@ -175,11 +191,13 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     updateUserProfile,
+    changePassword,
     assessmentHistory,
     recentActivity,
-    addAssessmentResult,
     addActivity,
     getDashboardStats,
+    fetchAssessmentHistory: memoizedFetchAssessmentHistory,
+    calculateWellnessStreak, // export for use if needed
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -191,4 +209,9 @@ export const useAuth = () => {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
+};
+
+export const useIsAdmin = () => {
+  const { user } = useAuth();
+  return user && user.role === 'admin';
 }; 

@@ -1,7 +1,9 @@
 import React from 'react';
 import { Users, MessageCircle, Phone, LifeBuoy, MapPin, Star } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const Support = () => {
+  const { addActivity } = useAuth();
   // Local support centers in Malawi
   const localSupportCenters = [
     {
@@ -62,6 +64,11 @@ const Support = () => {
     }
   ];
 
+  const handlePlatformClick = (platform) => {
+    addActivity('Support', `Accessed support platform: ${platform.name}`);
+    window.open(platform.website, '_blank');
+  };
+
   return (
     <div className="space-y-8">
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-8">
@@ -117,55 +124,19 @@ const Support = () => {
           Connect with trusted online mental health platforms for professional support, therapy, and wellness resources.
         </p>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-2 gap-8 mt-8">
           {mentalHealthPlatforms.map((platform) => (
-            <div key={platform.id} className="border border-slate-200 dark:border-slate-600 rounded-xl p-6 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-300 hover:shadow-lg">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0">
-                  <img 
-                    src={platform.logo} 
-                    alt={`${platform.name} logo`}
-                    className="w-16 h-16 rounded-lg object-cover"
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-2">
-                    {platform.name}
-                  </h4>
-                  {platform.type && (
-                    <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400 mb-1">
-                      {platform.type}
-                    </p>
-                  )}
-                  {platform.location && (
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
-                      📍 {platform.location}
-                    </p>
-                  )}
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-3 leading-relaxed">
-                    {platform.description}
-                  </p>
-                  {platform.tel && (
-                    <p className="text-xs text-slate-500 dark:text-slate-500 mb-1">
-                      📞 {platform.tel}
-                    </p>
-                  )}
-                  {platform.email && (
-                    <p className="text-xs text-slate-500 dark:text-slate-500 mb-4">
-                      ✉️ {platform.email}
-                    </p>
-                  )}
-                  <div className="flex justify-center">
-                    <a 
-                      href={platform.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-                    >
-                      Visit Site
-                    </a>
-                  </div>
-                </div>
+            <div key={platform.id} className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 flex items-center gap-6">
+              <img src={platform.logo} alt={platform.name} className="w-20 h-20 rounded-full object-cover" />
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{platform.name}</h3>
+                <p className="text-gray-600 dark:text-gray-300 mb-4">{platform.description}</p>
+                <button
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                  onClick={() => handlePlatformClick(platform)}
+                >
+                  Visit Platform
+                </button>
               </div>
             </div>
           ))}

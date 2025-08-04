@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
 import { ArrowRight, CheckCircle, Brain, Users, Shield, Clock, BookOpen, Sparkles, Star, Zap, AlertTriangle, Activity } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { calculateRiskLevel, getDetailedPrediction } from './Assessment/utils/assessment';
 
 const Assessment = () => {
-  const { isAuthenticated, addAssessmentResult } = useAuth();
+  const { isAuthenticated, assessmentHistory, addAssessmentResult, fetchAssessmentHistory, addActivity } = useAuth();
+  const navigate = useNavigate();
   const [answers, setAnswers] = useState({});
+  const [demographics, setDemographics] = useState({
+    gender: '',
+    age: ''
+  });
+  const [currentPage, setCurrentPage] = useState(0);
   const [showResults, setShowResults] = useState(false);
   const [score, setScore] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -40,6 +47,34 @@ const Assessment = () => {
     setAnswers((prev) => ({ ...prev, [questionIdx]: value }));
   };
 
+  const handleDemographicChange = (field, value) => {
+    if (field === 'age') {
+      setDemographics((prev) => ({ ...prev, [field]: value }));
+      if (value !== '' && Number(value) < 18) {
+        setError('You must be at least 18 years old to take this assessment.');
+      } else {
+        setError(null);
+      }
+    } else {
+      setDemographics((prev) => ({ ...prev, [field]: value }));
+    }
+  };
+
+  const nextPage = () => {
+    setCurrentPage(prev => prev + 1);
+  };
+
+  const prevPage = () => {
+    setCurrentPage(prev => prev - 1);
+  };
+
+  const totalPages = Math.ceil(questions.length / 4) + 1; // +1 for demographics page
+  const questionsPerPage = 4;
+  const currentQuestions = questions.slice(
+    (currentPage - 1) * questionsPerPage,
+    currentPage * questionsPerPage
+  );
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -55,6 +90,34 @@ const Assessment = () => {
       const predictedRiskLevel = await calculateRiskLevel(answers);
       setRiskLevel(predictedRiskLevel);
       setError(null);
+      
+      // --- Store result in backend for logged-in users ---
+      if (isAuthenticated) {
+        try {
+          const token = localStorage.getItem('token');
+          await fetch('http://localhost:5000/api/assessment-results', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              age: demographics.age,
+              gender: demographics.gender,
+              answers: Object.values(answers),
+              final_class: detailedPrediction.final_class,
+              confidence: detailedPrediction.confidence
+            })
+          });
+          // Refresh assessment history after saving
+          await fetchAssessmentHistory();
+          // Add activity for completed assessment
+          addActivity('Assessment', `Completed assessment: ${detailedPrediction.final_class}`);
+        } catch (err) {
+          console.error('Failed to save assessment result:', err);
+        }
+      }
+      // --- End store result ---
       
       if (isAuthenticated) {
         const result = getResultMessage(predictedRiskLevel);
@@ -78,6 +141,8 @@ const Assessment = () => {
 
   const resetAssessment = () => {
     setAnswers({});
+    setDemographics({ gender: '', age: '' });
+    setCurrentPage(0);
     setShowResults(false);
     setScore(0);
     setLoading(false);
@@ -286,6 +351,7 @@ const Assessment = () => {
                     </span>
                   </button>
                   <button 
+                    onClick={() => navigate(isAuthenticated ? '/support' : '/login')}
                     className="group px-6 py-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-500 rounded-lg font-bold hover:bg-slate-300 dark:hover:bg-slate-500 transition-all duration-300 text-sm"
                   >
                     <span className="flex items-center gap-2">
@@ -372,6 +438,7 @@ const Assessment = () => {
                       </span>
                     </button>
                     <button 
+                      onClick={() => navigate(isAuthenticated ? '/support' : '/login')}
                       className="group px-8 py-3 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-500 rounded-lg font-bold hover:bg-slate-300 dark:hover:bg-slate-500 transition-all duration-300"
                     >
                       <span className="flex items-center gap-2">
@@ -389,26 +456,116 @@ const Assessment = () => {
     );
   }
 
-  // New: Render all questions at once
+  // Paginated Assessment Form
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 py-8 px-4 flex items-center justify-center">
-      <form onSubmit={handleSubmit} className="max-w-2xl w-full mx-auto">
-        <h2 className="text-2xl md:text-3xl font-bold text-primary-600 mb-6">Mental Health Questions</h2>
+      <div className="max-w-2xl w-full mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h2 className="text-2xl md:text-3xl font-bold text-primary-600 mb-3">Depression Assessment</h2>
+          {currentPage === 0 && (
+            <p className="text-slate-600 dark:text-slate-300 text-base leading-relaxed">
+              Welcome! Let's start by collecting some basic information about you.
+            </p>
+          )}
+          {currentPage > 0 && (
+            <p className="text-slate-600 dark:text-slate-300 text-base leading-relaxed">
+              Please answer the following questions honestly based on your experiences over the past two weeks.
+            </p>
+          )}
+        </div>
+
+        {/* Progress Bar */}
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm text-slate-600 dark:text-slate-400">
+              Page {currentPage + 1} of {totalPages}
+            </span>
+            <span className="text-sm text-slate-600 dark:text-slate-400">
+              {Math.round(((currentPage + 1) / totalPages) * 100)}% Complete
+            </span>
+          </div>
+          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+            <div 
+              className="bg-primary-600 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${((currentPage + 1) / totalPages) * 100}%` }}
+            ></div>
+          </div>
+        </div>
+
+        {/* Page Content */}
+        {currentPage === 0 ? (
+          // Demographics Page
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-600 p-6 shadow-sm">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Demographic Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Gender */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Gender
+                </label>
+                <div className="flex items-center gap-4">
+                  <label className="inline-flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="gender"
+                      value="M"
+                      checked={demographics.gender === 'M'}
+                      onChange={() => handleDemographicChange('gender', 'M')}
+                      className="form-radio text-primary-600 focus:ring-primary-500"
+                    />
+                    <span className="ml-2 text-slate-700 dark:text-slate-200">Male</span>
+                  </label>
+                  <label className="inline-flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="gender"
+                      value="F"
+                      checked={demographics.gender === 'F'}
+                      onChange={() => handleDemographicChange('gender', 'F')}
+                      className="form-radio text-primary-600 focus:ring-primary-500"
+                    />
+                    <span className="ml-2 text-slate-700 dark:text-slate-200">Female</span>
+                  </label>
+                </div>
+              </div>
+              
+              {/* Age */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Age
+                </label>
+                <input
+                  type="number"
+                  min="18"
+                  max="120"
+                  value={demographics.age}
+                  onChange={(e) => handleDemographicChange('age', e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-slate-700 dark:text-slate-100"
+                  placeholder="Enter your age"
+                />
+              </div>
+            </div>
+          </div>
+        ) : (
+          // Questions Pages
         <div className="space-y-6">
-          {questions.map((q, idx) => (
-            <div key={idx} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-600 p-6 shadow-sm">
+            {currentQuestions.map((q, idx) => {
+              const questionIndex = (currentPage - 1) * questionsPerPage + idx;
+              return (
+                <div key={questionIndex} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-600 p-6 shadow-sm">
               <div className="flex items-center mb-3">
-                <span className="font-bold text-primary-600 mr-2">{idx + 1}.</span>
+                    <span className="font-bold text-primary-600 mr-2">{questionIndex + 1}.</span>
                 <span className="text-lg text-slate-800 dark:text-slate-100">{q}</span>
               </div>
               <div className="flex items-center gap-6 mt-2">
                 <label className="inline-flex items-center cursor-pointer">
                   <input
                     type="radio"
-                    name={`question-${idx}`}
+                        name={`question-${questionIndex}`}
                     value={1}
-                    checked={answers[idx] === 1}
-                    onChange={() => handleRadioChange(idx, 1)}
+                        checked={answers[questionIndex] === 1}
+                        onChange={() => handleRadioChange(questionIndex, 1)}
                     className="form-radio text-primary-600 focus:ring-primary-500"
                   />
                   <span className="ml-2 text-slate-700 dark:text-slate-200">Yes</span>
@@ -416,27 +573,89 @@ const Assessment = () => {
                 <label className="inline-flex items-center cursor-pointer">
                   <input
                     type="radio"
-                    name={`question-${idx}`}
+                        name={`question-${questionIndex}`}
                     value={0}
-                    checked={answers[idx] === 0}
-                    onChange={() => handleRadioChange(idx, 0)}
+                        checked={answers[questionIndex] === 0}
+                        onChange={() => handleRadioChange(questionIndex, 0)}
                     className="form-radio text-primary-600 focus:ring-primary-500"
                   />
                   <span className="ml-2 text-slate-700 dark:text-slate-200">No</span>
                 </label>
               </div>
             </div>
-          ))}
+              );
+            })}
         </div>
+        )}
+
+        {/* Navigation Buttons */}
+        <div className="flex justify-between items-center mt-8">
+          <button
+            type="button"
+            onClick={prevPage}
+            disabled={currentPage === 0}
+            className={`px-6 py-2 rounded-lg font-bold transition-all duration-300 ${
+              currentPage === 0
+                ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                : 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-500'
+            }`}
+          >
+            Previous
+          </button>
+
+          {currentPage === 0 ? (
+            // Next button for demographics page
+            <button
+              type="button"
+              onClick={nextPage}
+              disabled={demographics.gender === '' || demographics.age === '' || Number(demographics.age) < 18}
+              className={`px-6 py-2 rounded-lg font-bold transition-all duration-300 ${
+                demographics.gender === '' || demographics.age === '' || Number(demographics.age) < 18
+                  ? 'bg-primary-300 text-white cursor-not-allowed'
+                  : 'bg-primary-600 hover:bg-primary-700 text-white'
+              }`}
+            >
+              Next
+            </button>
+          ) : currentPage === totalPages - 1 ? (
+            // Submit button for last page
         <button
-          type="submit"
+              type="button"
+              onClick={handleSubmit}
           disabled={Object.keys(answers).length !== questions.length || loading}
-          className={`mt-8 w-full py-3 rounded-lg font-bold text-white transition-all duration-300 shadow-md ${Object.keys(answers).length !== questions.length || loading ? 'bg-primary-300 cursor-not-allowed' : 'bg-primary-600 hover:bg-primary-700'}`}
-        >
-          {loading ? 'Submitting...' : 'Submit'}
+              className={`px-6 py-2 rounded-lg font-bold transition-all duration-300 ${
+                Object.keys(answers).length !== questions.length || loading
+                  ? 'bg-primary-300 text-white cursor-not-allowed'
+                  : 'bg-primary-600 hover:bg-primary-700 text-white'
+              }`}
+            >
+              {loading ? 'Submitting...' : 'Submit Assessment'}
+            </button>
+          ) : (
+            // Next button for question pages
+            <button
+              type="button"
+              onClick={nextPage}
+              disabled={currentQuestions.every((_, idx) => {
+                const questionIndex = (currentPage - 1) * questionsPerPage + idx;
+                return answers[questionIndex] === undefined;
+              })}
+              className={`px-6 py-2 rounded-lg font-bold transition-all duration-300 ${
+                currentQuestions.every((_, idx) => {
+                  const questionIndex = (currentPage - 1) * questionsPerPage + idx;
+                  return answers[questionIndex] === undefined;
+                })
+                  ? 'bg-primary-300 text-white cursor-not-allowed'
+                  : 'bg-primary-600 hover:bg-primary-700 text-white'
+              }`}
+            >
+              Next
         </button>
+          )}
+        </div>
+
         {error && <div className="mt-4 text-red-600 text-center">{error}</div>}
-      </form>
+      </div>
     </div>
   );
 };

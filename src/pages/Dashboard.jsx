@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { Navigate } from 'react-router-dom';
 import { 
   CalendarDays, 
   TrendingUp, 
@@ -13,7 +14,8 @@ import {
 } from 'lucide-react';
 
 const Dashboard = () => {
-  const { getDashboardStats, recentActivity } = useAuth();
+  const { getDashboardStats, recentActivity, isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
   const navigate = useNavigate();
   const stats = getDashboardStats();
 
@@ -47,7 +49,7 @@ const Dashboard = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
             <div>
@@ -64,7 +66,7 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Last Assessment</p>
-              <p className="text-lg font-semibold text-gray-900 dark:text-white">{stats.lastScore}</p>
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">{stats.lastScore} (Confidence: {stats.lastConfidence})</p>
             </div>
             <div className="p-3 bg-green-100 dark:bg-green-900 rounded-full">
               <TrendingUp className="w-6 h-6 text-green-600 dark:text-green-400" />
@@ -75,20 +77,8 @@ const Dashboard = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Resources Accessed</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.resourcesAccessed}</p>
-            </div>
-            <div className="p-3 bg-purple-100 dark:bg-purple-900 rounded-full">
-              <BookOpen className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div>
               <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Wellness Streak</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">7 days</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.wellnessStreak} {stats.wellnessStreak === 1 ? 'day' : 'days'}</p>
             </div>
             <div className="p-3 bg-red-100 dark:bg-red-900 rounded-full">
               <Heart className="w-6 h-6 text-red-600 dark:text-red-400" />

@@ -1,7 +1,20 @@
 import React from 'react';
 import { Clock, ArrowRight } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const ResourceList = ({ resources }) => {
+  const { addActivity } = useAuth();
+  const navigate = useNavigate();
+
+  const handleReadMore = (resource) => {
+    addActivity('Resource', `Read resource: ${resource.title}`);
+    // If you have a route for viewing the article, navigate to it here:
+    if (resource.id) {
+      navigate(`/article/${resource.id}`);
+    }
+  };
+
   return (
     <div className="grid gap-6">
       {resources.length === 0 ? (
@@ -39,7 +52,10 @@ const ResourceList = ({ resources }) => {
               <p className="text-neutral-600 mb-6 line-clamp-2">
                 {resource.excerpt}
               </p>
-              <button className="inline-flex items-center text-primary-600 hover:text-primary-700 font-medium text-sm group-hover:translate-x-0.5 transition-transform">
+              <button 
+                className="inline-flex items-center text-primary-600 hover:text-primary-700 font-medium text-sm group-hover:translate-x-0.5 transition-transform"
+                onClick={() => handleReadMore(resource)}
+              >
                 Read More
                 <ArrowRight className="ml-1 h-4 w-4" />
               </button>

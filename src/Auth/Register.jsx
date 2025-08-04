@@ -13,10 +13,20 @@ const Register = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
+  // Password strength checker
+  const isStrongPassword = (pwd) => {
+    // At least 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char
+    return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).{8,}$/.test(pwd);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+    if (!isStrongPassword(password)) {
+      setError('Password must be at least 8 characters and include uppercase, lowercase, number, and special character.');
+      return;
+    }
+    setLoading(true);
     try {
       const res = await fetch('http://localhost:5000/register', {
         method: 'POST',
