@@ -1154,6 +1154,655 @@ app.get('/api/admin/demographics', authenticateToken, async (req, res) => {
   }
 });
 
+// ============================================
+// ADMIN-SPECIFIC ENDPOINTS
+// ============================================
+
+// Middleware to check admin access
+const requireAdmin = (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+};
+
+// Admin Dashboard Stats - matches frontend expectation: /dashboard/stats
+app.get('/dashboard/stats', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { year, month } = req.query;
+    
+    // Build date filter conditions
+    let dateFilter = '';
+    let assessmentDateFilter = '';
+    
+    if (year && month) {
+      const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+      dateFilter = `WHERE created_at >= '${startDate}' AND created_at <= '${endDate} 23:59:59'`;
+      assessmentDateFilter = `WHERE created_at >= '${startDate}' AND created_at <= '${endDate} 23:59:59'`;
+    }
+    
+    // Get comprehensive dashboard statistics
+    const userStats = await pool.query(`
+      SELECT 
+        COUNT(*) as total_users,
+        COUNT(CASE WHEN last_login IS NOT NULL THEN 1 END) as active_users,
+        COUNT(CASE WHEN last_login IS NULL THEN 1 END) as inactive_users,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as new_users_week,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as new_users_month
+      FROM users
+      ${dateFilter}
+    `);
+
+    const assessmentStats = await pool.query(`
+      SELECT 
+        COUNT(*) as total_assessments,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as assessments_this_week,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as assessments_this_month,
+        AVG(total_score) as average_score,
+        AVG(confidence) as average_confidence
+      FROM assessment_results
+      ${assessmentDateFilter}
+    `);
+
+    // Get article count (if articles table exists)
+    let articleStats = { rows: [{ total_articles: 0 }] };
+    try {
+      articleStats = await pool.query(`SELECT COUNT(*) as total_articles FROM articles`);
+    } catch (err) {
+      console.log('Articles table not available');
+    }
+
+    // Calculate completion rate (assessments vs users)
+    const completionRate = userStats.rows[0].total_users > 0 
+      ? ((assessmentStats.rows[0].total_assessments / userStats.rows[0].total_users) * 100).toFixed(1)
+      : 0;
+
+    // Calculate percentage changes
+    const currentWeekAssessments = await pool.query(`
+      SELECT COUNT(*) as count FROM assessment_results 
+      WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+    `);
+
+    const previousWeekAssessments = await pool.query(`
+      SELECT COUNT(*) as count FROM assessment_results 
+      WHERE created_at >= CURRENT_DATE - INTERVAL '14 days' 
+      AND created_at < CURRENT_DATE - INTERVAL '7 days'
+    `);
+
+    const currentWeekUsers = await pool.query(`
+      SELECT COUNT(*) as count FROM users 
+      WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+    `);
+
+    const previousWeekUsers = await pool.query(`
+      SELECT COUNT(*) as count FROM users 
+      WHERE created_at >= CURRENT_DATE - INTERVAL '14 days' 
+      AND created_at < CURRENT_DATE - INTERVAL '7 days'
+    `);
+
+    const userStatsData = userStats.rows[0];
+    const assessmentStatsData = assessmentStats.rows[0];
+    const articleStatsData = articleStats.rows[0];
+    
+    const currentWeekAssessmentsCount = parseInt(currentWeekAssessments.rows[0].count);
+    const previousWeekAssessmentsCount = parseInt(previousWeekAssessments.rows[0].count);
+    const currentWeekUsersCount = parseInt(currentWeekUsers.rows[0].count);
+    const previousWeekUsersCount = parseInt(previousWeekUsers.rows[0].count);
+
+    // Calculate percentage changes
+    const assessmentChange = previousWeekAssessmentsCount > 0 
+      ? ((currentWeekAssessmentsCount - previousWeekAssessmentsCount) / previousWeekAssessmentsCount * 100).toFixed(1)
+      : currentWeekAssessmentsCount > 0 ? 100 : 0;
+    
+    const userChange = previousWeekUsersCount > 0 
+      ? ((currentWeekUsersCount - previousWeekUsersCount) / previousWeekUsersCount * 100).toFixed(1)
+      : currentWeekUsersCount > 0 ? 100 : 0;
+
+    // Format response to match frontend expectations
+    const dashboardData = {
+      users: {
+        total: parseInt(userStatsData.total_users),
+        change: `${userChange >= 0 ? '+' : ''}${userChange}%`,
+        changeType: userChange >= 0 ? 'positive' : 'negative',
+        subtitle: 'Active registered users',
+        trend: [
+          Math.max(0, parseInt(userStatsData.total_users) - 50),
+          Math.max(0, parseInt(userStatsData.total_users) - 40),
+          Math.max(0, parseInt(userStatsData.total_users) - 30),
+          Math.max(0, parseInt(userStatsData.total_users) - 20),
+          Math.max(0, parseInt(userStatsData.total_users) - 10),
+          parseInt(userStatsData.total_users)
+        ],
+        color: 'blue'
+      },
+      assessments: {
+        total: parseInt(assessmentStatsData.total_assessments),
+        change: `${assessmentChange >= 0 ? '+' : ''}${assessmentChange}%`,
+        changeType: assessmentChange >= 0 ? 'positive' : 'negative',
+        subtitle: 'Completed assessments',
+        trend: [
+          Math.max(0, parseInt(assessmentStatsData.total_assessments) - 50),
+          Math.max(0, parseInt(assessmentStatsData.total_assessments) - 40),
+          Math.max(0, parseInt(assessmentStatsData.total_assessments) - 30),
+          Math.max(0, parseInt(assessmentStatsData.total_assessments) - 20),
+          Math.max(0, parseInt(assessmentStatsData.total_assessments) - 10),
+          parseInt(assessmentStatsData.total_assessments)
+        ],
+        color: 'green'
+      },
+      articles: {
+        total: parseInt(articleStatsData.total_articles),
+        change: '+0',
+        changeType: 'neutral',
+        subtitle: 'Published articles',
+        trend: [
+          Math.max(0, parseInt(articleStatsData.total_articles) - 5),
+          Math.max(0, parseInt(articleStatsData.total_articles) - 4),
+          Math.max(0, parseInt(articleStatsData.total_articles) - 3),
+          Math.max(0, parseInt(articleStatsData.total_articles) - 2),
+          Math.max(0, parseInt(articleStatsData.total_articles) - 1),
+          parseInt(articleStatsData.total_articles)
+        ],
+        color: 'purple'
+      },
+      recentAssessments: {
+        total: parseInt(assessmentStatsData.assessments_this_week),
+        change: `${assessmentChange >= 0 ? '+' : ''}${assessmentChange}%`,
+        changeType: assessmentChange >= 0 ? 'positive' : 'negative',
+        subtitle: 'This week',
+        trend: [
+          Math.max(0, parseInt(assessmentStatsData.assessments_this_week) - 5),
+          Math.max(0, parseInt(assessmentStatsData.assessments_this_week) - 4),
+          Math.max(0, parseInt(assessmentStatsData.assessments_this_week) - 3),
+          Math.max(0, parseInt(assessmentStatsData.assessments_this_week) - 2),
+          Math.max(0, parseInt(assessmentStatsData.assessments_this_week) - 1),
+          parseInt(assessmentStatsData.assessments_this_week)
+        ],
+        color: 'orange'
+      },
+      averageScore: {
+        total: parseFloat(assessmentStatsData.average_score || 0).toFixed(1),
+        change: '+0.0',
+        changeType: 'neutral',
+        subtitle: 'Out of 20',
+        trend: [
+          Math.max(0, parseFloat(assessmentStatsData.average_score || 0) - 0.5),
+          Math.max(0, parseFloat(assessmentStatsData.average_score || 0) - 0.4),
+          Math.max(0, parseFloat(assessmentStatsData.average_score || 0) - 0.3),
+          Math.max(0, parseFloat(assessmentStatsData.average_score || 0) - 0.2),
+          Math.max(0, parseFloat(assessmentStatsData.average_score || 0) - 0.1),
+          parseFloat(assessmentStatsData.average_score || 0)
+        ],
+        color: 'indigo'
+      },
+      completionRate: {
+        total: parseFloat(completionRate),
+        change: '+0.0%',
+        changeType: 'neutral',
+        subtitle: 'Assessment completion',
+        trend: [
+          Math.max(0, parseFloat(completionRate) - 5),
+          Math.max(0, parseFloat(completionRate) - 4),
+          Math.max(0, parseFloat(completionRate) - 3),
+          Math.max(0, parseFloat(completionRate) - 2),
+          Math.max(0, parseFloat(completionRate) - 1),
+          parseFloat(completionRate)
+        ],
+        color: 'green'
+      }
+    };
+
+    res.json(dashboardData);
+  } catch (err) {
+    console.error('Error fetching dashboard stats:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin Users endpoint - matches frontend expectation: /admin/users
+app.get('/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = '', status = '', role = '' } = req.query;
+    const offset = (page - 1) * limit;
+    
+    let query = `
+      SELECT u.id, u.name, u.email, u.role, u.created_at,
+             CASE WHEN u.last_login IS NOT NULL THEN 'active' ELSE 'inactive' END as status,
+             ar.age
+      FROM users u
+      LEFT JOIN LATERAL (
+        SELECT age FROM assessment_results ar2 WHERE ar2.user_id = u.id ORDER BY ar2.created_at DESC LIMIT 1
+      ) ar ON true
+      WHERE 1=1
+    `;
+    const params = [];
+    let paramCount = 0;
+
+    if (search) {
+      paramCount++;
+      query += ` AND (u.name ILIKE $${paramCount} OR u.email ILIKE $${paramCount})`;
+      params.push(`%${search}%`);
+    }
+
+    if (status) {
+      if (status === 'active') {
+        query += ` AND u.last_login IS NOT NULL`;
+      } else if (status === 'inactive') {
+        query += ` AND u.last_login IS NULL`;
+      }
+    }
+
+    if (role) {
+      paramCount++;
+      query += ` AND u.role = $${paramCount}`;
+      params.push(role);
+    }
+
+    // Get total count
+    const countQuery = query.replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) FROM');
+    const countResult = await pool.query(countQuery, params);
+    const totalUsers = parseInt(countResult.rows[0].count);
+
+    // Get paginated results
+    paramCount++;
+    query += ` ORDER BY u.created_at DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+    params.push(limit, offset);
+
+    const result = await pool.query(query, params);
+    
+    res.json({
+      users: result.rows,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalUsers / limit),
+        totalUsers,
+        hasNext: page * limit < totalUsers,
+        hasPrev: page > 1
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching admin users:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin Stats endpoint - matches frontend expectation: /admin/stats
+app.get('/admin/stats', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const stats = await pool.query(`
+      SELECT 
+        COUNT(*) as total_users,
+        COUNT(CASE WHEN last_login IS NOT NULL THEN 1 END) as active_users,
+        COUNT(CASE WHEN last_login IS NULL THEN 1 END) as inactive_users,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as new_users_week,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as new_users_month
+      FROM users
+    `);
+    
+    res.json(stats.rows[0]);
+  } catch (err) {
+    console.error('Error fetching admin stats:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin Assessments endpoint - matches frontend expectation: /admin/assessments
+app.get('/admin/assessments', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = '', final_class = '', gender = '' } = req.query;
+    const offset = (page - 1) * limit;
+
+    let whereConditions = [];
+    let queryParams = [];
+    let paramCount = 0;
+
+    if (search) {
+      paramCount++;
+      whereConditions.push(`(u.name ILIKE $${paramCount} OR u.email ILIKE $${paramCount})`);
+      queryParams.push(`%${search}%`);
+    }
+
+    if (final_class) {
+      paramCount++;
+      whereConditions.push(`ar.final_class = $${paramCount}`);
+      queryParams.push(final_class);
+    }
+
+    if (gender) {
+      paramCount++;
+      whereConditions.push(`ar.gender = $${paramCount}`);
+      queryParams.push(gender);
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+    // Get total count
+    const countQuery = `
+      SELECT COUNT(*) as total 
+      FROM assessment_results ar 
+      LEFT JOIN users u ON ar.user_id = u.id
+      ${whereClause}
+    `;
+    const countResult = await pool.query(countQuery, queryParams);
+    const total = parseInt(countResult.rows[0].total);
+
+    // Get assessments with pagination
+    paramCount++;
+    const query = `
+      SELECT 
+        ar.id, ar.user_id, ar.age, ar.gender, ar.total_score, 
+        ar.final_class, ar.confidence, ar.created_at,
+        u.name as user_name, u.email as user_email
+      FROM assessment_results ar
+      LEFT JOIN users u ON ar.user_id = u.id
+      ${whereClause}
+      ORDER BY ar.created_at DESC
+      LIMIT $${paramCount} OFFSET $${paramCount + 1}
+    `;
+    queryParams.push(limit, offset);
+
+    const result = await pool.query(query, queryParams);
+    
+    res.json({
+      assessments: result.rows,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(total / limit),
+        totalAssessments: total,
+        hasNext: page * limit < total,
+        hasPrev: page > 1
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching admin assessments:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin Demographics endpoint - matches frontend expectation: /admin/demographics
+app.get('/admin/demographics', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    // Get age distribution
+    const ageDistribution = await pool.query(`
+      SELECT 
+        CASE 
+          WHEN age BETWEEN 18 AND 25 THEN '18-25'
+          WHEN age BETWEEN 26 AND 35 THEN '26-35'
+          WHEN age BETWEEN 36 AND 45 THEN '36-45'
+          ELSE '46+'
+        END as age_group,
+        COUNT(*) as count
+      FROM assessment_results 
+      WHERE age >= 18
+      GROUP BY age_group
+      ORDER BY age_group
+    `);
+
+    // Get gender distribution
+    const genderDistribution = await pool.query(`
+      SELECT 
+        gender,
+        COUNT(*) as count,
+        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM assessment_results), 1) as percentage
+      FROM assessment_results 
+      GROUP BY gender 
+      ORDER BY count DESC
+    `);
+
+    // Get risk level by demographics
+    const riskByDemographics = await pool.query(`
+      SELECT 
+        CASE 
+          WHEN age BETWEEN 18 AND 25 THEN '18-25'
+          WHEN age BETWEEN 26 AND 35 THEN '26-35'
+          WHEN age BETWEEN 36 AND 45 THEN '36-45'
+          ELSE '46+'
+        END as age_group,
+        gender,
+        final_class,
+        COUNT(*) as count
+      FROM assessment_results 
+      WHERE age >= 18
+      GROUP BY age_group, gender, final_class
+      ORDER BY age_group, gender, final_class
+    `);
+
+    // Get summary statistics
+    const totalUsers = await pool.query(`SELECT COUNT(*) as total FROM assessment_results`);
+    const averageAge = await pool.query(`SELECT AVG(age) as average FROM assessment_results WHERE age >= 18`);
+    const mostCommonAge = await pool.query(`
+      SELECT age_group FROM (
+        SELECT 
+          CASE 
+            WHEN age BETWEEN 18 AND 25 THEN '18-25'
+            WHEN age BETWEEN 26 AND 35 THEN '26-35'
+            WHEN age BETWEEN 36 AND 45 THEN '36-45'
+            ELSE '46+'
+          END as age_group,
+          COUNT(*) as count
+        FROM assessment_results 
+        WHERE age >= 18
+        GROUP BY age_group
+        ORDER BY count DESC
+        LIMIT 1
+      ) subquery
+    `);
+
+    res.json({
+      ageDistribution: ageDistribution.rows,
+      genderDistribution: genderDistribution.rows,
+      riskByDemographics: riskByDemographics.rows,
+      summary: {
+        totalUsers: parseInt(totalUsers.rows[0].total),
+        averageAge: parseFloat(averageAge.rows[0].average) || 0,
+        mostCommonAgeGroup: mostCommonAge.rows[0]?.age_group || '26-35'
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching admin demographics:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin Recent Activity endpoint - matches frontend expectation: /admin/recent-activity
+app.get('/admin/recent-activity', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    // Get recent user registrations
+    const recentUsers = await pool.query(`
+      SELECT 
+        id,
+        name as user,
+        'user' as type,
+        'registered' as action,
+        created_at as timestamp
+      FROM users 
+      WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+      ORDER BY created_at DESC
+      LIMIT 10
+    `);
+
+    // Get recent assessments
+    const recentAssessments = await pool.query(`
+      SELECT 
+        ar.id,
+        u.name as user,
+        'assessment' as type,
+        'completed assessment' as action,
+        ar.created_at as timestamp
+      FROM assessment_results ar
+      JOIN users u ON ar.user_id = u.id
+      WHERE ar.created_at >= CURRENT_DATE - INTERVAL '7 days'
+      ORDER BY ar.created_at DESC
+      LIMIT 10
+    `);
+
+    // Combine all activities and sort by timestamp
+    const allActivities = [
+      ...recentUsers.rows,
+      ...recentAssessments.rows
+    ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    // Take the most recent 15 activities
+    const recentActivity = allActivities.slice(0, 15);
+
+    res.json(recentActivity);
+  } catch (err) {
+    console.error('Error fetching admin recent activity:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Fix the Users.jsx endpoint - it calls /users directly, not /api/users
+app.get('/users', authenticateToken, async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = '', status = '', role = '' } = req.query;
+    const offset = (page - 1) * limit;
+    
+    let query = `
+      SELECT u.id, u.name, u.email, u.role, u.created_at,
+             CASE WHEN u.last_login IS NOT NULL THEN 'active' ELSE 'inactive' END as status,
+             ar.age
+      FROM users u
+      LEFT JOIN LATERAL (
+        SELECT age FROM assessment_results ar2 WHERE ar2.user_id = u.id ORDER BY ar2.created_at DESC LIMIT 1
+      ) ar ON true
+      WHERE 1=1
+    `;
+    const params = [];
+    let paramCount = 0;
+
+    if (search) {
+      paramCount++;
+      query += ` AND (u.name ILIKE $${paramCount} OR u.email ILIKE $${paramCount})`;
+      params.push(`%${search}%`);
+    }
+
+    if (status) {
+      if (status === 'active') {
+        query += ` AND u.last_login IS NOT NULL`;
+      } else if (status === 'inactive') {
+        query += ` AND u.last_login IS NULL`;
+      }
+    }
+
+    if (role) {
+      paramCount++;
+      query += ` AND u.role = $${paramCount}`;
+      params.push(role);
+    }
+
+    // Get total count
+    const countQuery = query.replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) FROM');
+    const countResult = await pool.query(countQuery, params);
+    const totalUsers = parseInt(countResult.rows[0].count);
+
+    // Get paginated results
+    paramCount++;
+    query += ` ORDER BY u.created_at DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+    params.push(limit, offset);
+
+    const result = await pool.query(query, params);
+    
+    res.json({
+      users: result.rows,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalUsers / limit),
+        totalUsers,
+        hasNext: page * limit < totalUsers,
+        hasPrev: page > 1
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching users:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Fix the Users.jsx stats endpoint - it calls /users/stats directly
+app.get('/users/stats', authenticateToken, async (req, res) => {
+  try {
+    const stats = await pool.query(`
+      SELECT 
+        COUNT(*) as total_users,
+        COUNT(CASE WHEN last_login IS NOT NULL THEN 1 END) as active_users,
+        COUNT(CASE WHEN last_login IS NULL THEN 1 END) as inactive_users,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as new_users_week,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as new_users_month
+      FROM users
+    `);
+    
+    res.json(stats.rows[0]);
+  } catch (err) {
+    console.error('Error fetching user stats:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Fix the user management endpoints to work without /api prefix
+app.delete('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Prevent admin from deleting themselves
+    if (parseInt(id) === req.user.id) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+    
+    const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ message: 'User deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting user:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/users/:id/deactivate', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(
+      'UPDATE users SET last_login = NULL WHERE id = $1 RETURNING id, name, email, role',
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ message: 'User deactivated successfully', user: result.rows[0] });
+  } catch (err) {
+    console.error('Error deactivating user:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/users/:id/make-admin', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(
+      'UPDATE users SET role = $1 WHERE id = $2 RETURNING id, name, email, role',
+      ['admin', id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ message: 'User made admin successfully', user: result.rows[0] });
+  } catch (err) {
+    console.error('Error making user admin:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
