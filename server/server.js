@@ -7,7 +7,7 @@ const pool = require('./db');
 const fetch = require('node-fetch'); // Add at the top with other requires
 
 const app = express();
-const JWT_SECRET = '2003'; // Use a strong secret in production
+const JWT_SECRET = 'hGr9ZkdEeU'; // Use a strong secret in production
 
 app.use(cors());
 app.use(express.json());
