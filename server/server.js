@@ -1428,7 +1428,7 @@ app.get('/admin/users', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 // Admin Stats endpoint - matches frontend expectation: /admin/stats
-app.get('/admin/stats', authenticateToken, requireAdmin, async (req, res) => {
+app.get('/dashboard/stats', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const stats = await pool.query(`
       SELECT 
