@@ -1812,16 +1812,18 @@ app.get('/api/dashboard/stats', authenticateToken, requireAdmin, async (req, res
     
     console.log(`Fetching dashboard stats for ${year}-${month}`);
     
-    // Get basic stats
-    const statsQuery = `
+    // Reuse the working user stats query from /api/users/stats
+    const userStatsQuery = `
       SELECT 
         COUNT(*) as total_users,
         COUNT(CASE WHEN last_login IS NOT NULL THEN 1 END) as active_users,
-        COUNT(CASE WHEN created_at >= date_trunc('week', CURRENT_DATE) THEN 1 END) as new_users_week
+        COUNT(CASE WHEN last_login IS NULL THEN 1 END) as inactive_users,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as new_users_week,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as new_users_month
       FROM users
     `;
-    const statsResult = await pool.query(statsQuery);
-    const stats = statsResult.rows[0];
+    const userStatsResult = await pool.query(userStatsQuery);
+    const userStats = userStatsResult.rows[0];
     
     // Get assessment stats
     const assessmentStatsQuery = `
@@ -1878,9 +1880,9 @@ app.get('/api/dashboard/stats', authenticateToken, requireAdmin, async (req, res
     // Calculate percentage changes (simplified - using dummy data for now)
     const responseData = {
       stats: {
-        total_users: parseInt(stats.total_users),
-        active_users: parseInt(stats.active_users),
-        new_users_week: parseInt(stats.new_users_week),
+        total_users: parseInt(userStats.total_users),
+        active_users: parseInt(userStats.active_users),
+        new_users_week: parseInt(userStats.new_users_week),
         total_assessments: parseInt(assessmentStats.total_assessments),
         user_change: 5.2, // Placeholder - would need historical data
         assessment_change: 12.8 // Placeholder - would need historical data
@@ -1948,6 +1950,156 @@ app.get('/api/recent-activity', authenticateToken, requireAdmin, async (req, res
     
   } catch (err) {
     console.error('Error fetching recent activity:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get assessments for admin (used by AssessmentPage.jsx)
+app.get('/api/assessments', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = '', final_class = '', gender = '' } = req.query;
+    const offset = (page - 1) * limit;
+    
+    console.log('Fetching assessments with params:', { page, limit, search, final_class, gender });
+    
+    let query = `
+      SELECT ar.*, u.name as user_name, u.email as user_email
+      FROM assessment_results ar
+      JOIN users u ON ar.user_id = u.id
+      WHERE 1=1
+    `;
+    const params = [];
+    let paramCount = 0;
+
+    if (search) {
+      paramCount++;
+      query += ` AND (u.name ILIKE $${paramCount} OR u.email ILIKE $${paramCount})`;
+      params.push(`%${search}%`);
+    }
+
+    if (final_class) {
+      paramCount++;
+      query += ` AND ar.final_class = $${paramCount}`;
+      params.push(final_class);
+    }
+
+    if (gender) {
+      paramCount++;
+      query += ` AND ar.gender = $${paramCount}`;
+      params.push(gender);
+    }
+
+    // Get total count
+    const countQuery = query.replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) FROM');
+    const countResult = await pool.query(countQuery, params);
+    const total = parseInt(countResult.rows[0].count);
+
+    // Get paginated results
+    paramCount++;
+    query += ` ORDER BY ar.created_at DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+    params.push(limit, offset);
+
+    const result = await pool.query(query, params);
+    
+    console.log('Assessments found:', result.rows.length);
+    
+    res.json({
+      assessments: result.rows,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / limit)
+    });
+  } catch (err) {
+    console.error('Error fetching assessments:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get demographics data for admin (used by DemographicsPage.jsx)
+app.get('/api/admin/demographics', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    console.log('Fetching demographics data...');
+    
+    // Get age distribution
+    const ageQuery = `
+      SELECT 
+        CASE 
+          WHEN age < 18 THEN 'Under 18'
+          WHEN age BETWEEN 18 AND 25 THEN '18-25'
+          WHEN age BETWEEN 26 AND 35 THEN '26-35'
+          WHEN age BETWEEN 36 AND 45 THEN '36-45'
+          WHEN age BETWEEN 46 AND 55 THEN '46-55'
+          ELSE '55+'
+        END as age_group,
+        COUNT(*) as count,
+        ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM assessment_results)), 2) as percentage
+      FROM assessment_results
+      GROUP BY age_group
+      ORDER BY 
+        CASE 
+          WHEN age < 18 THEN 1
+          WHEN age BETWEEN 18 AND 25 THEN 2
+          WHEN age BETWEEN 26 AND 35 THEN 3
+          WHEN age BETWEEN 36 AND 45 THEN 4
+          WHEN age BETWEEN 46 AND 55 THEN 5
+          ELSE 6
+        END
+    `;
+    
+    // Get gender distribution
+    const genderQuery = `
+      SELECT 
+        gender,
+        COUNT(*) as count,
+        ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM assessment_results)), 2) as percentage
+      FROM assessment_results
+      GROUP BY gender
+      ORDER BY count DESC
+    `;
+    
+    // Get risk level distribution
+    const riskQuery = `
+      SELECT 
+        final_class,
+        COUNT(*) as count,
+        ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM assessment_results)), 2) as percentage
+      FROM assessment_results
+      GROUP BY final_class
+      ORDER BY count DESC
+    `;
+    
+    // Get total stats
+    const statsQuery = `
+      SELECT 
+        COUNT(*) as total_assessments,
+        COUNT(DISTINCT user_id) as unique_users,
+        AVG(age) as average_age
+      FROM assessment_results
+    `;
+    
+    const [ageResult, genderResult, riskResult, statsResult] = await Promise.all([
+      pool.query(ageQuery),
+      pool.query(genderQuery),
+      pool.query(riskQuery),
+      pool.query(statsQuery)
+    ]);
+    
+    const responseData = {
+      ageDistribution: ageResult.rows,
+      genderDistribution: genderResult.rows,
+      riskLevelDistribution: riskResult.rows,
+      stats: {
+        total_assessments: parseInt(statsResult.rows[0].total_assessments),
+        unique_users: parseInt(statsResult.rows[0].unique_users),
+        average_age: parseFloat(statsResult.rows[0].average_age).toFixed(1)
+      }
+    };
+    
+    console.log('Demographics data response:', JSON.stringify(responseData, null, 2));
+    res.json(responseData);
+    
+  } catch (err) {
+    console.error('Error fetching demographics data:', err);
     res.status(500).json({ error: err.message });
   }
 });
