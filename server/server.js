@@ -1803,6 +1803,155 @@ app.patch('/users/:id/make-admin', authenticateToken, requireAdmin, async (req, 
   }
 });
 
+// Admin Dashboard API Endpoints
+
+// Get dashboard statistics
+app.get('/api/dashboard/stats', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { year = new Date().getFullYear(), month = new Date().getMonth() + 1 } = req.query;
+    
+    console.log(`Fetching dashboard stats for ${year}-${month}`);
+    
+    // Get basic stats
+    const statsQuery = `
+      SELECT 
+        COUNT(*) as total_users,
+        COUNT(CASE WHEN last_login IS NOT NULL THEN 1 END) as active_users,
+        COUNT(CASE WHEN created_at >= date_trunc('week', CURRENT_DATE) THEN 1 END) as new_users_week
+      FROM users
+    `;
+    const statsResult = await pool.query(statsQuery);
+    const stats = statsResult.rows[0];
+    
+    // Get assessment stats
+    const assessmentStatsQuery = `
+      SELECT COUNT(*) as total_assessments
+      FROM assessment_results
+    `;
+    const assessmentStatsResult = await pool.query(assessmentStatsQuery);
+    const assessmentStats = assessmentStatsResult.rows[0];
+    
+    // Get risk level distribution
+    const riskLevelQuery = `
+      SELECT 
+        final_class,
+        COUNT(*) as count,
+        ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM assessment_results)), 2) as percentage
+      FROM assessment_results
+      GROUP BY final_class
+      ORDER BY count DESC
+    `;
+    const riskLevelResult = await pool.query(riskLevelQuery);
+    
+    // Get assessment trends for the specified month/year
+    const trendsQuery = `
+      SELECT 
+        DATE(created_at) as day,
+        COUNT(*) as assessments
+      FROM assessment_results
+      WHERE EXTRACT(YEAR FROM created_at) = $1 
+        AND EXTRACT(MONTH FROM created_at) = $2
+      GROUP BY DATE(created_at)
+      ORDER BY day
+    `;
+    const trendsResult = await pool.query(trendsQuery, [year, month]);
+    
+    // Get demographics data
+    const demographicsQuery = `
+      SELECT 
+        CASE 
+          WHEN age < 18 THEN 'Under 18'
+          WHEN age BETWEEN 18 AND 25 THEN '18-25'
+          WHEN age BETWEEN 26 AND 35 THEN '26-35'
+          WHEN age BETWEEN 36 AND 45 THEN '36-45'
+          WHEN age BETWEEN 46 AND 55 THEN '46-55'
+          ELSE '55+'
+        END as age_group,
+        final_class,
+        COUNT(*) as count
+      FROM assessment_results
+      GROUP BY age_group, final_class
+      ORDER BY age_group, final_class
+    `;
+    const demographicsResult = await pool.query(demographicsQuery);
+    
+    // Calculate percentage changes (simplified - using dummy data for now)
+    const responseData = {
+      stats: {
+        total_users: parseInt(stats.total_users),
+        active_users: parseInt(stats.active_users),
+        new_users_week: parseInt(stats.new_users_week),
+        total_assessments: parseInt(assessmentStats.total_assessments),
+        user_change: 5.2, // Placeholder - would need historical data
+        assessment_change: 12.8 // Placeholder - would need historical data
+      },
+      riskLevelDistribution: riskLevelResult.rows,
+      assessmentTrends: trendsResult.rows,
+      demographics: demographicsResult.rows
+    };
+    
+    console.log('Dashboard stats response:', JSON.stringify(responseData, null, 2));
+    res.json(responseData);
+    
+  } catch (err) {
+    console.error('Error fetching dashboard stats:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get recent activity
+app.get('/api/recent-activity', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    console.log('Fetching recent activity...');
+    
+    // Get recent user signups
+    const signupsQuery = `
+      SELECT 
+        'user_signup' as type,
+        name as user,
+        'signed up' as action,
+        created_at as timestamp,
+        id
+      FROM users
+      ORDER BY created_at DESC
+      LIMIT 5
+    `;
+    
+    // Get recent assessments
+    const assessmentsQuery = `
+      SELECT 
+        'assessment' as type,
+        u.name as user,
+        CONCAT('completed assessment (', ar.final_class, ')') as action,
+        ar.created_at as timestamp,
+        ar.id
+      FROM assessment_results ar
+      JOIN users u ON ar.user_id = u.id
+      ORDER BY ar.created_at DESC
+      LIMIT 5
+    `;
+    
+    const [signupsResult, assessmentsResult] = await Promise.all([
+      pool.query(signupsQuery),
+      pool.query(assessmentsQuery)
+    ]);
+    
+    // Combine and sort by timestamp
+    const activities = [
+      ...signupsResult.rows,
+      ...assessmentsResult.rows
+    ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+     .slice(0, 10); // Get top 10 most recent
+    
+    console.log('Recent activities found:', activities.length);
+    res.json(activities);
+    
+  } catch (err) {
+    console.error('Error fetching recent activity:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
