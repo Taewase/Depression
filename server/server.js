@@ -94,6 +94,14 @@ function authenticateToken(req, res, next) {
   });
 }
 
+// Middleware to check admin access
+const requireAdmin = (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+};
+
 // Example protected route
 app.get('/dashboard-data', authenticateToken, (req, res) => {
   res.json({ message: 'This is protected dashboard data!', user: req.user });
@@ -538,7 +546,7 @@ app.patch('/api/users/:id/make-admin', authenticateToken, async (req, res) => {
 
 // Get dashboard statistics
 // Recent activities endpoint
-app.get('/api/recent-activity', authenticateToken, async (req, res) => {
+app.get('/api/recent-activity', authenticateToken, requireAdmin, async (req, res) => {
   try {
     // Get recent user registrations
     const recentUsers = await pool.query(`
@@ -883,7 +891,7 @@ app.get('/api/assessments/export', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
+app.get('/api/dashboard/stats', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { year, month } = req.query;
     
@@ -1157,14 +1165,6 @@ app.get('/api/admin/demographics', authenticateToken, async (req, res) => {
 // ============================================
 // ADMIN-SPECIFIC ENDPOINTS
 // ============================================
-
-// Middleware to check admin access
-const requireAdmin = (req, res, next) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-  next();
-};
 
 // Admin Dashboard Stats - matches frontend expectation: /dashboard/stats
 app.get('/dashboard/stats', authenticateToken, requireAdmin, async (req, res) => {
