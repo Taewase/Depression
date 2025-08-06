@@ -1167,22 +1167,10 @@ app.get('/api/admin/demographics', authenticateToken, async (req, res) => {
 // ============================================
 
 // Admin Dashboard Stats - matches frontend expectation: /dashboard/stats
-app.get('/dashboard/stats', authenticateToken, requireAdmin, async (req, res) => {
+// Update this endpoint to properly calculate stats
+app.get('/api/dashboard/stats', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { year, month } = req.query;
-    
-    // Build date filter conditions
-    let dateFilter = '';
-    let assessmentDateFilter = '';
-    
-    if (year && month) {
-      const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
-      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
-      dateFilter = `WHERE created_at >= '${startDate}' AND created_at <= '${endDate} 23:59:59'`;
-      assessmentDateFilter = `WHERE created_at >= '${startDate}' AND created_at <= '${endDate} 23:59:59'`;
-    }
-    
-    // Get comprehensive dashboard statistics
+    // Get user statistics
     const userStats = await pool.query(`
       SELECT 
         COUNT(*) as total_users,
@@ -1191,149 +1179,95 @@ app.get('/dashboard/stats', authenticateToken, requireAdmin, async (req, res) =>
         COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as new_users_week,
         COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as new_users_month
       FROM users
-      ${dateFilter}
     `);
 
+    // Get assessment statistics
     const assessmentStats = await pool.query(`
       SELECT 
         COUNT(*) as total_assessments,
         COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as assessments_this_week,
         COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as assessments_this_month,
-        AVG(total_score) as average_score,
-        AVG(confidence) as average_confidence
+        AVG(total_score) as average_score
       FROM assessment_results
-      ${assessmentDateFilter}
     `);
 
-    // Get article count (if articles table exists)
-    let articleStats = { rows: [{ total_articles: 0 }] };
+    // Get article count
+    let articleCount = 0;
     try {
-      articleStats = await pool.query(`SELECT COUNT(*) as total_articles FROM articles`);
+      const articleRes = await pool.query('SELECT COUNT(*) as count FROM articles');
+      articleCount = parseInt(articleRes.rows[0].count);
     } catch (err) {
       console.log('Articles table not available');
     }
 
-    // Calculate completion rate (assessments vs users)
+    // Calculate completion rate (assessments per user)
     const completionRate = userStats.rows[0].total_users > 0 
-      ? ((assessmentStats.rows[0].total_assessments / userStats.rows[0].total_users) * 100).toFixed(1)
+      ? (assessmentStats.rows[0].total_assessments / userStats.rows[0].total_users * 100).toFixed(1)
       : 0;
 
-    // Calculate percentage changes
-    const currentWeekAssessments = await pool.query(`
-      SELECT COUNT(*) as count FROM assessment_results 
-      WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
-    `);
-
+    // Calculate weekly changes
+    const currentWeekAssessments = assessmentStats.rows[0].assessments_this_week;
     const previousWeekAssessments = await pool.query(`
-      SELECT COUNT(*) as count FROM assessment_results 
-      WHERE created_at >= CURRENT_DATE - INTERVAL '14 days' 
+      SELECT COUNT(*) as count FROM assessment_results
+      WHERE created_at >= CURRENT_DATE - INTERVAL '14 days'
       AND created_at < CURRENT_DATE - INTERVAL '7 days'
     `);
+    const prevWeekAssessCount = parseInt(previousWeekAssessments.rows[0].count || 0);
+    const assessmentChange = prevWeekAssessCount > 0 
+      ? ((currentWeekAssessments - prevWeekAssessCount) / prevWeekAssessCount * 100).toFixed(1)
+      : currentWeekAssessments > 0 ? '100.0' : '0.0';
 
-    const currentWeekUsers = await pool.query(`
-      SELECT COUNT(*) as count FROM users 
-      WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
-    `);
-
+    const currentWeekUsers = userStats.rows[0].new_users_week;
     const previousWeekUsers = await pool.query(`
-      SELECT COUNT(*) as count FROM users 
-      WHERE created_at >= CURRENT_DATE - INTERVAL '14 days' 
+      SELECT COUNT(*) as count FROM users
+      WHERE created_at >= CURRENT_DATE - INTERVAL '14 days'
       AND created_at < CURRENT_DATE - INTERVAL '7 days'
     `);
-
-    const userStatsData = userStats.rows[0];
-    const assessmentStatsData = assessmentStats.rows[0];
-    const articleStatsData = articleStats.rows[0];
-    
-    const currentWeekAssessmentsCount = parseInt(currentWeekAssessments.rows[0].count);
-    const previousWeekAssessmentsCount = parseInt(previousWeekAssessments.rows[0].count);
-    const currentWeekUsersCount = parseInt(currentWeekUsers.rows[0].count);
-    const previousWeekUsersCount = parseInt(previousWeekUsers.rows[0].count);
-
-    // Calculate percentage changes
-    const assessmentChange = previousWeekAssessmentsCount > 0 
-      ? ((currentWeekAssessmentsCount - previousWeekAssessmentsCount) / previousWeekAssessmentsCount * 100).toFixed(1)
-      : currentWeekAssessmentsCount > 0 ? 100 : 0;
-    
-    const userChange = previousWeekUsersCount > 0 
-      ? ((currentWeekUsersCount - previousWeekUsersCount) / previousWeekUsersCount * 100).toFixed(1)
-      : currentWeekUsersCount > 0 ? 100 : 0;
+    const prevWeekUsersCount = parseInt(previousWeekUsers.rows[0].count || 0);
+    const userChange = prevWeekUsersCount > 0 
+      ? ((currentWeekUsers - prevWeekUsersCount) / prevWeekUsersCount * 100).toFixed(1)
+      : currentWeekUsers > 0 ? '100.0' : '0.0';
 
     // Format response to match frontend expectations
-    const dashboardData = {
+    res.json({
       users: {
-        total: parseInt(userStatsData.total_users),
-        change: `${userChange >= 0 ? '+' : ''}${userChange}%`,
-        changeType: userChange >= 0 ? 'positive' : 'negative',
+        total: parseInt(userStats.rows[0].total_users),
+        change: userChange,
+        changeType: parseFloat(userChange) >= 0 ? 'positive' : 'negative',
         subtitle: 'Active registered users',
-        trend: [
-          Math.max(0, parseInt(userStatsData.total_users) - 50),
-          Math.max(0, parseInt(userStatsData.total_users) - 40),
-          Math.max(0, parseInt(userStatsData.total_users) - 30),
-          Math.max(0, parseInt(userStatsData.total_users) - 20),
-          Math.max(0, parseInt(userStatsData.total_users) - 10),
-          parseInt(userStatsData.total_users)
-        ],
+        trend: [10, 20, 30, 40, 50, parseInt(userStats.rows[0].total_users)],
         color: 'blue'
       },
       assessments: {
-        total: parseInt(assessmentStatsData.total_assessments),
-        change: `${assessmentChange >= 0 ? '+' : ''}${assessmentChange}%`,
-        changeType: assessmentChange >= 0 ? 'positive' : 'negative',
+        total: parseInt(assessmentStats.rows[0].total_assessments),
+        change: assessmentChange,
+        changeType: parseFloat(assessmentChange) >= 0 ? 'positive' : 'negative',
         subtitle: 'Completed assessments',
-        trend: [
-          Math.max(0, parseInt(assessmentStatsData.total_assessments) - 50),
-          Math.max(0, parseInt(assessmentStatsData.total_assessments) - 40),
-          Math.max(0, parseInt(assessmentStatsData.total_assessments) - 30),
-          Math.max(0, parseInt(assessmentStatsData.total_assessments) - 20),
-          Math.max(0, parseInt(assessmentStatsData.total_assessments) - 10),
-          parseInt(assessmentStatsData.total_assessments)
-        ],
+        trend: [5, 10, 15, 20, 25, parseInt(assessmentStats.rows[0].total_assessments)],
         color: 'green'
       },
       articles: {
-        total: parseInt(articleStatsData.total_articles),
+        total: articleCount,
         change: '+0',
         changeType: 'neutral',
         subtitle: 'Published articles',
-        trend: [
-          Math.max(0, parseInt(articleStatsData.total_articles) - 5),
-          Math.max(0, parseInt(articleStatsData.total_articles) - 4),
-          Math.max(0, parseInt(articleStatsData.total_articles) - 3),
-          Math.max(0, parseInt(articleStatsData.total_articles) - 2),
-          Math.max(0, parseInt(articleStatsData.total_articles) - 1),
-          parseInt(articleStatsData.total_articles)
-        ],
+        trend: [1, 2, 3, 4, 5, articleCount],
         color: 'purple'
       },
       recentAssessments: {
-        total: parseInt(assessmentStatsData.assessments_this_week),
-        change: `${assessmentChange >= 0 ? '+' : ''}${assessmentChange}%`,
-        changeType: assessmentChange >= 0 ? 'positive' : 'negative',
+        total: parseInt(assessmentStats.rows[0].assessments_this_week),
+        change: assessmentChange,
+        changeType: parseFloat(assessmentChange) >= 0 ? 'positive' : 'negative',
         subtitle: 'This week',
-        trend: [
-          Math.max(0, parseInt(assessmentStatsData.assessments_this_week) - 5),
-          Math.max(0, parseInt(assessmentStatsData.assessments_this_week) - 4),
-          Math.max(0, parseInt(assessmentStatsData.assessments_this_week) - 3),
-          Math.max(0, parseInt(assessmentStatsData.assessments_this_week) - 2),
-          Math.max(0, parseInt(assessmentStatsData.assessments_this_week) - 1),
-          parseInt(assessmentStatsData.assessments_this_week)
-        ],
+        trend: [1, 2, 3, 4, 5, parseInt(assessmentStats.rows[0].assessments_this_week)],
         color: 'orange'
       },
       averageScore: {
-        total: parseFloat(assessmentStatsData.average_score || 0).toFixed(1),
+        total: parseFloat(assessmentStats.rows[0].average_score || 0).toFixed(1),
         change: '+0.0',
         changeType: 'neutral',
         subtitle: 'Out of 20',
-        trend: [
-          Math.max(0, parseFloat(assessmentStatsData.average_score || 0) - 0.5),
-          Math.max(0, parseFloat(assessmentStatsData.average_score || 0) - 0.4),
-          Math.max(0, parseFloat(assessmentStatsData.average_score || 0) - 0.3),
-          Math.max(0, parseFloat(assessmentStatsData.average_score || 0) - 0.2),
-          Math.max(0, parseFloat(assessmentStatsData.average_score || 0) - 0.1),
-          parseFloat(assessmentStatsData.average_score || 0)
-        ],
+        trend: [5, 6, 7, 8, 9, parseFloat(assessmentStats.rows[0].average_score || 0)],
         color: 'indigo'
       },
       completionRate: {
@@ -1341,19 +1275,11 @@ app.get('/dashboard/stats', authenticateToken, requireAdmin, async (req, res) =>
         change: '+0.0%',
         changeType: 'neutral',
         subtitle: 'Assessment completion',
-        trend: [
-          Math.max(0, parseFloat(completionRate) - 5),
-          Math.max(0, parseFloat(completionRate) - 4),
-          Math.max(0, parseFloat(completionRate) - 3),
-          Math.max(0, parseFloat(completionRate) - 2),
-          Math.max(0, parseFloat(completionRate) - 1),
-          parseFloat(completionRate)
-        ],
+        trend: [10, 20, 30, 40, 50, parseFloat(completionRate)],
         color: 'green'
       }
-    };
+    });
 
-    res.json(dashboardData);
   } catch (err) {
     console.error('Error fetching dashboard stats:', err);
     res.status(500).json({ error: err.message });
@@ -1427,8 +1353,8 @@ app.get('/admin/users', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// Admin Stats endpoint - matches frontend expectation: /admin/stats
-app.get('/dashboard/stats', authenticateToken, requireAdmin, async (req, res) => {
+// Admin Stats endpoint - matches frontend expectation: /api/dashboard/stats
+app.get('/api/dashboard/stats', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const stats = await pool.query(`
       SELECT 
@@ -1447,8 +1373,8 @@ app.get('/dashboard/stats', authenticateToken, requireAdmin, async (req, res) =>
   }
 });
 
-// Admin Assessments endpoint - matches frontend expectation: /admin/assessments
-app.get('/admin/assessments', authenticateToken, requireAdmin, async (req, res) => {
+// Admin Assessments endpoint - matches frontend expectation: /api/assessments
+app.get('/api/assessments', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { page = 1, limit = 10, search = '', final_class = '', gender = '' } = req.query;
     const offset = (page - 1) * limit;
@@ -1520,8 +1446,8 @@ app.get('/admin/assessments', authenticateToken, requireAdmin, async (req, res) 
   }
 });
 
-// Admin Demographics endpoint - matches frontend expectation: /admin/demographics
-app.get('/admin/demographics', authenticateToken, requireAdmin, async (req, res) => {
+// Admin Demographics endpoint - matches frontend expectation: /api/admin/demographics
+app.get('/api/admin/demographics', authenticateToken, requireAdmin, async (req, res) => {
   try {
     // Get age distribution
     const ageDistribution = await pool.query(`
