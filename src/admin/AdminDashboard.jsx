@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from 'recharts';
 import AdminLayout from './components/AdminLayout';
+import { getDashboardStats, getRecentActivity } from './api';
 
 const AdminDashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
@@ -21,28 +22,18 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Date filter state - default to July 2025
+  // Date filter state - default to August 2025
   const [selectedYear, setSelectedYear] = useState(2025);
-  const [selectedMonth, setSelectedMonth] = useState(7); // July
+  const [selectedMonth, setSelectedMonth] = useState(8); // August
 
   // Fetch dashboard data
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/dashboard/stats?year=${selectedYear}&month=${selectedMonth}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setDashboardData(data);
-      } else {
-        setError('Failed to fetch dashboard data');
-      }
+      const data = await getDashboardStats(selectedYear, selectedMonth);
+      console.log('Dashboard data received:', data);
+      setDashboardData(data);
+      setError(null);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       setError('Failed to fetch dashboard data');
@@ -54,20 +45,9 @@ const AdminDashboard = () => {
   // Fetch recent activity data
   const fetchRecentActivity = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/recent-activity', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setRecentActivity(data);
-      } else {
-        console.error('Failed to fetch recent activity');
-      }
+      const data = await getRecentActivity();
+      console.log('Recent activity data received:', data);
+      setRecentActivity(data);
     } catch (error) {
       console.error('Error fetching recent activity:', error);
     }
@@ -76,6 +56,24 @@ const AdminDashboard = () => {
   useEffect(() => {
     fetchDashboardData();
     fetchRecentActivity();
+    
+    // Debug: Test user role
+    const testUserRole = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('https://depression-41o5.onrender.com/api/debug/user', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        const data = await response.json();
+        console.log('User role debug:', data);
+      } catch (error) {
+        console.error('User role debug error:', error);
+      }
+    };
+    testUserRole();
   }, [selectedYear, selectedMonth]);
 
   if (loading) {
@@ -115,49 +113,50 @@ const AdminDashboard = () => {
   console.log('Demographics:', dashboardData.demographics);
 
   // Prepare stats cards data
-  const stats = [
+  const stats = dashboardData?.stats ? [
     {
       title: "Total Users",
-      value: dashboardData.stats.total_users.toLocaleString(),
-      change: `${dashboardData.stats.user_change >= 0 ? '+' : ''}${dashboardData.stats.user_change}%`,
-      changeType: dashboardData.stats.user_change >= 0 ? "positive" : "negative",
+      value: (dashboardData.stats.total_users || 0).toLocaleString(),
+      change: `${(dashboardData.stats.user_change || 0) >= 0 ? '+' : ''}${dashboardData.stats.user_change || 0}%`,
+      changeType: (dashboardData.stats.user_change || 0) >= 0 ? "positive" : "negative",
       icon: Users
     },
     {
       title: "Assessments Taken",
-      value: dashboardData.stats.total_assessments.toLocaleString(),
-      change: `${dashboardData.stats.assessment_change >= 0 ? '+' : ''}${dashboardData.stats.assessment_change}%`,
-      changeType: dashboardData.stats.assessment_change >= 0 ? "positive" : "negative",
+      value: (dashboardData.stats.total_assessments || 0).toLocaleString(),
+      change: `${(dashboardData.stats.assessment_change || 0) >= 0 ? '+' : ''}${dashboardData.stats.assessment_change || 0}%`,
+      changeType: (dashboardData.stats.assessment_change || 0) >= 0 ? "positive" : "negative",
       icon: FileText
     },
     {
       title: "Active Users",
-      value: dashboardData.stats.active_users.toLocaleString(),
-      change: `${dashboardData.stats.active_users > 0 ? '+' : ''}${((dashboardData.stats.active_users / dashboardData.stats.total_users) * 100).toFixed(1)}%`,
+      value: (dashboardData.stats.active_users || 0).toLocaleString(),
+      change: `${(dashboardData.stats.active_users || 0) > 0 ? '+' : ''}${dashboardData.stats.total_users > 0 ? (((dashboardData.stats.active_users || 0) / dashboardData.stats.total_users) * 100).toFixed(1) : 0}%`,
       changeType: "positive",
       icon: UserCheck
     },
     {
       title: "New This Week",
-      value: dashboardData.stats.new_users_week.toLocaleString(),
-      change: `${dashboardData.stats.new_users_week > 0 ? '+' : ''}${dashboardData.stats.new_users_week}`,
+      value: (dashboardData.stats.new_users_week || 0).toLocaleString(),
+      change: `${(dashboardData.stats.new_users_week || 0) > 0 ? '+' : ''}${dashboardData.stats.new_users_week || 0}`,
       changeType: "positive",
       icon: UserPlus
     }
-  ];
+  ] : [];
 
   // Prepare risk level data for pie chart
-  const riskLevelData = (dashboardData.riskLevelDistribution || []).map(item => ({
+  const riskLevelData = (dashboardData.riskLevelDistribution || []).map((item, index) => ({
     name: item.final_class,
     value: parseFloat(item.percentage),
     count: parseInt(item.count),
-    color: item.final_class === 'No Depression' ? '#c48ce4ff' :
-           item.final_class === 'Mild Depression' ? '#9b4ce6ff' :
-           item.final_class === 'Moderate Depression' ? '#7d00c5ff' : '#63008aff'
+    color: item.final_class === 'No Depression' ? '#06B6D4' :      // Cyan-500
+           item.final_class === 'Mild Depression' ? '#3B82F6' :    // Blue-500
+           item.final_class === 'Moderate Depression' ? '#6366F1' : // Indigo-500
+           '#7C3AED'  // Violet-600
   }));
 
   // Prepare assessment trends data - handle monthly data starting from July 2025
-  const assessmentData = (dashboardData.assessmentTrends || []).map(item => {
+  const assessmentData = (dashboardData.assessmentTrends || []).map((item, index) => {
     const dayDate = new Date(item.day);
     return {
       date: dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -181,17 +180,31 @@ const AdminDashboard = () => {
     } else {
       const newItem = {
         ageGroup: item.age_group,
-        [propertyName]: parseInt(item.count)
+        [propertyName]: parseInt(item.count),
+        no: 0,
+        mild: 0,
+        moderate: 0,
+        severe: 0
       };
+      newItem[propertyName] = parseInt(item.count);
       acc.push(newItem);
     }
     return acc;
   }, []);
 
   // Debug processed chart data
+  console.log('Raw Dashboard Data:', dashboardData);
   console.log('Processed Risk Level Data:', riskLevelData);
   console.log('Processed Assessment Data:', assessmentData);
   console.log('Processed Demographics Data:', demographicsData);
+  console.log('Stats Array:', stats);
+  
+  // Check for duplicate keys in demographics data
+  const ageGroups = demographicsData.map(item => item.ageGroup);
+  const duplicateAgeGroups = ageGroups.filter((item, index) => ageGroups.indexOf(item) !== index);
+  if (duplicateAgeGroups.length > 0) {
+    console.warn('Duplicate age groups found:', duplicateAgeGroups);
+  }
 
   // Helper function to format time ago
   const formatTimeAgo = (timestamp) => {
@@ -256,7 +269,7 @@ const AdminDashboard = () => {
         <div className="bg-white dark:bg-slate-800 p-3 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg">
           <p className="text-slate-900 dark:text-slate-100 font-medium">{`Age Group: ${label}`}</p>
           {payload.map((entry, index) => (
-            <p key={index} className="text-slate-600 dark:text-slate-400">
+            <p key={`bar-tooltip-${entry.dataKey}-${entry.name}-${index}`} className="text-slate-600 dark:text-slate-400">
               {`${entry.name}: ${entry.value || 0}`}
             </p>
           ))}
@@ -266,61 +279,70 @@ const AdminDashboard = () => {
     return null;
   };
 
+  // Show loading state
+  if (loading || !dashboardData) {
+    return (
+      <AdminLayout pageName="Dashboard">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+            <p className="text-slate-600 dark:text-slate-400">Loading dashboard data...</p>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <AdminLayout pageName="Dashboard">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="text-red-500 mb-4">
+              <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <p className="text-slate-600 dark:text-slate-400 mb-4">{error}</p>
+            <button 
+              onClick={() => {
+                setError(null);
+                fetchDashboardData();
+                fetchRecentActivity();
+              }}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
   return (
-    <AdminLayout pageName="Dashboard">
+    <AdminLayout 
+      pageName="Dashboard"
+      selectedYear={selectedYear}
+      selectedMonth={selectedMonth}
+      onYearChange={setSelectedYear}
+      onMonthChange={setSelectedMonth}
+    >
       <div className="space-y-6">
         {/* Dashboard Title */}
-        <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+        <div className="mb-2">
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
-            Dashboard
+            Overview
           </h1>
-          
-          {/* Date Filter Controls */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-lg border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Filter:</span>
-            </div>
-            
-            <div className="flex gap-2 w-full sm:w-auto">
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                className="flex-1 sm:flex-none px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value={2024}>2024</option>
-                <option value={2025}>2025</option>
-                <option value={2026}>2026</option>
-              </select>
-              
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                className="flex-1 sm:flex-none px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value={1}>January</option>
-                <option value={2}>February</option>
-                <option value={3}>March</option>
-                <option value={4}>April</option>
-                <option value={5}>May</option>
-                <option value={6}>June</option>
-                <option value={7}>July</option>
-                <option value={8}>August</option>
-                <option value={9}>September</option>
-                <option value={10}>October</option>
-                <option value={11}>November</option>
-                <option value={12}>December</option>
-              </select>
-            </div>
-          </div>
         </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          {stats.map((stat, index) => {
+          {stats.length > 0 ? stats.map((stat, index) => {
             const Icon = stat.icon;
             return (
-              <div key={index} className="bg-white dark:bg-slate-800 rounded-xl p-4 sm:p-6 shadow-sm border border-slate-200 dark:border-slate-700">
+              <div key={`stat-card-${index}`} className="bg-white dark:bg-slate-800 rounded-xl p-4 sm:p-6 shadow-sm border border-slate-200 dark:border-slate-700">
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1 truncate">
@@ -350,7 +372,11 @@ const AdminDashboard = () => {
                 </div>
               </div>
             );
-          })}
+          }) : (
+            <div className="col-span-full text-center py-8">
+              <p className="text-slate-500 dark:text-slate-400">No statistics available</p>
+            </div>
+          )}
         </div>
 
         {/* Charts */}
@@ -374,6 +400,9 @@ const AdminDashboard = () => {
                     <YAxis
                       stroke="#64748B"
                       fontSize={12}
+                      allowDecimals={false}
+                      domain={[0, 'dataMax']}
+                      tickFormatter={(value) => Math.round(value)}
                     />
                     <Tooltip content={<CustomTooltip />} />
                     <Line
@@ -399,21 +428,21 @@ const AdminDashboard = () => {
           <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">
               Risk Level Distribution
           </h3>
-            <div className="h-48 sm:h-64">
+            <div className="h-64 sm:h-80">
               {riskLevelData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={riskLevelData}
                       cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
+                      cy="45%"
+                      innerRadius={50}
+                      outerRadius={80}
                       paddingAngle={5}
                       dataKey="value"
                     >
                       {riskLevelData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                        <Cell key={`risk-cell-${entry.name}-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
                     <Tooltip
@@ -433,9 +462,10 @@ const AdminDashboard = () => {
                     />
                     <Legend
                       verticalAlign="bottom"
-                      height={36}
-                      formatter={(value, entry) => (
-                        <span className="text-slate-700 dark:text-slate-300 text-sm">{value}</span>
+                      height={60}
+                      wrapperStyle={{ paddingTop: '20px' }}
+                      formatter={(value) => (
+                        <span className="text-slate-700 dark:text-slate-300 text-xs">{value}</span>
                       )}
                     />
                   </PieChart>
@@ -475,14 +505,14 @@ const AdminDashboard = () => {
                     <Legend
                       verticalAlign="bottom"
                       height={36}
-                      formatter={(value, entry) => (
+                      formatter={(value) => (
                         <span className="text-slate-700 dark:text-slate-300 text-sm">{value}</span>
                       )}
                     />
-                    <Bar dataKey="no" stackId="a" fill="#c48ce4ff" name="No Depression" />
-                    <Bar dataKey="mild" stackId="a" fill="#9b4ce6ff" name="Mild Depression" />
-                    <Bar dataKey="moderate" stackId="a" fill="#7d00c5ff" name="Moderate Depression" />
-                    <Bar dataKey="severe" stackId="a" fill="#63008aff" name="Severe Depression" />
+                    <Bar dataKey="no" stackId="a" fill="#06B6D4" name="No Depression" />
+                    <Bar dataKey="mild" stackId="a" fill="#3B82F6" name="Mild Depression" />
+                    <Bar dataKey="moderate" stackId="a" fill="#6366F1" name="Moderate Depression" />
+                    <Bar dataKey="severe" stackId="a" fill="#7C3AED" name="Severe Depression" />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -506,11 +536,11 @@ const AdminDashboard = () => {
                   </div>
                 </div>
               ) : (
-                recentActivity.map((activity) => {
+                recentActivity.map((activity, index) => {
                   const Icon = getActivityIcon(activity.type);
                   const color = getActivityColor(activity.type);
                   return (
-                    <div key={activity.id} className="flex items-center p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+                    <div key={`activity-${activity.id || index}`} className="flex items-center p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
                       <div className={`p-2 rounded-full bg-white dark:bg-slate-600 shadow-sm ${color} flex-shrink-0`}>
                         <Icon className="w-4 h-4" />
                       </div>

@@ -4,7 +4,6 @@ import {
   LayoutDashboard, 
   Users, 
   Stethoscope,
-  Settings,
   LogOut,
   Brain,
   BarChart3,
@@ -21,7 +20,6 @@ const AdminSidebar = ({ isOpen, onClose }) => {
     { path: '/admin/users', icon: Users, label: 'Users' },
     { path: '/admin/demographics', icon: BarChart3, label: 'Demographics' },
     { path: '/admin/assessments', icon: Stethoscope, label: 'Assessments' },
-    { path: '/admin/settings', icon: Settings, label: 'Settings' },
   ];
 
   const isActive = (path) => {

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import AdminSidebar from './AdminSidebar';
 import AdminHeader from './AdminHeader';
 
-const AdminLayout = ({ children, pageName = "Dashboard" }) => {
+const AdminLayout = ({ children, pageName = "Dashboard", selectedYear, selectedMonth, onYearChange, onMonthChange }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
@@ -27,10 +27,14 @@ const AdminLayout = ({ children, pageName = "Dashboard" }) => {
         <AdminHeader 
           pageName={pageName} 
           onMenuClick={() => setSidebarOpen(true)}
+          selectedYear={selectedYear}
+          selectedMonth={selectedMonth}
+          onYearChange={onYearChange}
+          onMonthChange={onMonthChange}
         />
         
         {/* Page Content */}
-        <main className="pt-16 p-4 sm:p-6">
+        <main className="pt-20 sm:pt-28 p-4 sm:p-6">
           {children}
         </main>
       </div>

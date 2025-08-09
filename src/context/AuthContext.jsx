@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom';
 
 const AuthContext = createContext(null);
 
-const API_URL = 'http://localhost:5000';
+const API_URL = 'https://depression-41o5.onrender.com';
 
 const fetchAssessmentHistory = async (setAssessmentHistory) => {
   const token = localStorage.getItem('token');
   if (!token) return setAssessmentHistory([]);
   try {
-    const res = await fetch('http://localhost:5000/api/assessment-history', {
+    const res = await fetch('https://depression-41o5.onrender.com/api/assessment-history', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     if (!res.ok) throw new Error('Failed to fetch assessment history');
@@ -39,24 +39,31 @@ const fetchUserProfile = async (setUser, logout) => {
   }
 };
 
-// Helper to calculate streak
-const calculateWellnessStreak = (activityList) => {
-  if (!activityList || activityList.length === 0) return 0;
-  // Get unique days with activity
-  const days = Array.from(new Set(activityList.map(a => a.date))).sort((a, b) => new Date(b) - new Date(a));
-  if (days.length === 0) return 0;
-  let streak = 1;
-  let prev = new Date(days[0]);
-  for (let i = 1; i < days.length; i++) {
-    const curr = new Date(days[i]);
-    const diff = (prev - curr) / (1000 * 60 * 60 * 24);
-    if (diff === 1) {
+const calculateWellnessStreak = (assessmentHistory) => {
+  if (!assessmentHistory || assessmentHistory.length === 0) return 0;
+  
+  // Sort assessments by date (most recent first)
+  const sortedAssessments = [...assessmentHistory].sort((a, b) => 
+    new Date(b.created_at) - new Date(a.created_at)
+  );
+  
+  let streak = 0;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  for (let i = 0; i < sortedAssessments.length; i++) {
+    const assessmentDate = new Date(sortedAssessments[i].created_at);
+    assessmentDate.setHours(0, 0, 0, 0);
+    
+    const daysDiff = Math.floor((today - assessmentDate) / (1000 * 60 * 60 * 24));
+    
+    if (daysDiff === streak) {
       streak++;
-      prev = curr;
-    } else {
+    } else if (daysDiff > streak) {
       break;
     }
   }
+  
   return streak;
 };
 
@@ -82,12 +89,23 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
   const [assessmentHistory, setAssessmentHistory] = useState([]); // Start empty
-  const [recentActivity, setRecentActivity] = useState([]); // Start empty
+  const [recentActivity, setRecentActivity] = useState([]);
   const navigate = useNavigate();
 
-  // Debug authentication state changes
   useEffect(() => {
-    console.log('AuthContext: Authentication state changed to:', isAuthenticated);
+    const token = localStorage.getItem('token');
+    if (token) {
+      // Validate token and fetch user profile
+      fetchUserProfile(setUser, logout).then(() => {
+        setIsAuthenticated(true);
+        fetchAssessmentHistory(setAssessmentHistory);
+      });
+    } else {
+      setIsAuthenticated(false);
+      setUser(null);
+      setAssessmentHistory([]);
+      setRecentActivity([]);
+    }
   }, [isAuthenticated]);
 
   const login = async (email, password) => {
@@ -124,60 +142,23 @@ export const AuthProvider = ({ children }) => {
     navigate('/login');
   };
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      // Validate token and fetch user profile
-      fetchUserProfile(setUser, logout).then(() => {
-        setIsAuthenticated(true);
-        fetchAssessmentHistory(setAssessmentHistory);
-      });
-    } else {
-      setIsAuthenticated(false);
-      setUser(null);
-      setAssessmentHistory([]);
-      setRecentActivity([]);
-    }
-    // eslint-disable-next-line
-  }, []);
-
-  const updateUserProfile = (updatedData) => {
-    // In a real app, you'd make an API call here
-    setUser(prevUser => ({
-      ...prevUser,
-      ...updatedData
-    }));
+  const addAssessmentResult = (result) => {
+    setAssessmentHistory(prev => [result, ...prev]);
   };
 
-  // Remove or update addAssessmentResult to not use local mock data
-
-  const addActivity = (type, description) => {
+  const addActivity = (type, desc) => {
     const newActivity = {
       id: Date.now(),
       type,
-      desc: description,
+      desc,
       date: new Date().toISOString().split('T')[0],
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      time: new Date().toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      })
     };
-    
     setRecentActivity(prev => [newActivity, ...prev.slice(0, 4)]);
-  };
-
-  // Calculate dynamic stats
-  const getDashboardStats = () => {
-    const completedAssessments = assessmentHistory.length;
-    const lastAssessment = assessmentHistory[0];
-    const lastScore = lastAssessment ? lastAssessment.final_class : 'No assessments yet';
-    const lastConfidence = lastAssessment ? lastAssessment.confidence : null;
-    const resourcesAccessed = recentActivity.filter(a => a.type === 'Resource').length;
-    const wellnessStreak = calculateWellnessStreak(recentActivity);
-    return {
-      completedAssessments,
-      lastScore,
-      lastConfidence,
-      resourcesAccessed,
-      wellnessStreak
-    };
   };
 
   // Memoize fetchAssessmentHistory to prevent infinite re-renders
@@ -190,17 +171,25 @@ export const AuthProvider = ({ children }) => {
     user,
     login,
     logout,
-    updateUserProfile,
-    changePassword,
     assessmentHistory,
+    addAssessmentResult,
     recentActivity,
     addActivity,
-    getDashboardStats,
     fetchAssessmentHistory: memoizedFetchAssessmentHistory,
-    calculateWellnessStreak, // export for use if needed
+    changePassword,
+    getDashboardStats: () => ({
+      completedAssessments: assessmentHistory.length,
+      lastScore: assessmentHistory.length > 0 ? `${assessmentHistory[0].final_class}` : 'No assessments yet',
+      lastConfidence: assessmentHistory.length > 0 ? `${Math.round(assessmentHistory[0].confidence * 100)}%` : 'N/A',
+      wellnessStreak: calculateWellnessStreak(assessmentHistory)
+    })
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => {
@@ -212,6 +201,6 @@ export const useAuth = () => {
 };
 
 export const useIsAdmin = () => {
-  const { user } = useAuth();
-  return user && user.role === 'admin';
-}; 
+  const { user, isAuthenticated } = useAuth();
+  return isAuthenticated && user && user.role === 'admin';
+};

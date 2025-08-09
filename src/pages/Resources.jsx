@@ -20,13 +20,13 @@ const Resources = () => {
       try {
         setLoading(true);
         // Fetch categories
-        const categoriesResponse = await axios.get('http://localhost:5000/api/articles/categories');
+        const categoriesResponse = await axios.get('https://depression-41o5.onrender.com/api/articles/categories');
         setCategories(['all', ...categoriesResponse.data]);
         
         // Fetch articles
         const articlesUrl = selectedCategory === 'all' 
-          ? 'http://localhost:5000/api/articles'
-          : `http://localhost:5000/api/articles?category=${selectedCategory}`;
+          ? 'https://depression-41o5.onrender.com/api/articles'
+          : `https://depression-41o5.onrender.com/api/articles?category=${selectedCategory}`;
         
         const articlesResponse = await axios.get(articlesUrl);
         setArticles(articlesResponse.data);

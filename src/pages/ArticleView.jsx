@@ -14,7 +14,7 @@ const ArticleView = () => {
     const fetchArticle = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`http://localhost:5000/api/articles/${id}`);
+        const response = await axios.get(`https://depression-41o5.onrender.com/api/articles/${id}`);
         setArticle(response.data);
         setError(null);
       } catch (err) {

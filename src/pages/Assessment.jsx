@@ -95,7 +95,7 @@ const Assessment = () => {
       if (isAuthenticated) {
         try {
           const token = localStorage.getItem('token');
-          await fetch('http://localhost:5000/api/assessment-results', {
+          await fetch('https://depression-41o5.onrender.com/api/assessment-results', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

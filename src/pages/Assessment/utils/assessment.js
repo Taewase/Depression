@@ -1,112 +1,132 @@
-const ML_API_URL = 'http://localhost:5000/api/predict'; // Point to backend server
+const ML_API_URL = 'https://fastapi-whd1.onrender.com/predict';
 
+// This must exactly match your FastAPI FEATURES list order
+const QUESTION_MAPPING = [
+  'headache', 'appetite', 'sleep', 'fear', 'shaking',
+  'nervous', 'digestion', 'troubled', 'unhappy', 'cry',
+  'enjoyment', 'decisions', 'work', 'play', 'interest',
+  'worthless', 'suicide', 'tiredness', 'uncomfortable', 'easily_tired'
+];
+
+/**
+ * Transforms {0:1, 1:0} format to {headache:1, appetite:0}
+ * @param {Object} answers - Original answers with numeric keys
+ * @returns {Object} - Transformed answers with named keys
+ */
+const transformAnswers = (answers) => {
+  return Object.keys(answers).reduce((result, key) => {
+    const index = parseInt(key);
+    if (!isNaN(index) && index < QUESTION_MAPPING.length) {
+      result[QUESTION_MAPPING[index]] = answers[key];
+    }
+    return result;
+  }, {});
+};
+
+/**
+ * Calculates depression risk level
+ * @param {Object} answers - User answers (0-1 for each question)
+ * @returns {Promise<string>} - 'depressed' or 'notDepressed'
+ */
 export const calculateRiskLevel = async (answers) => {
   try {
-    console.log('Starting risk level calculation with answers:', answers);
-    
-    // Convert answers object to array in the correct order
-    const answersArray = Object.keys(answers)
-      .sort((a, b) => parseInt(a) - parseInt(b))
-      .map(key => answers[key]);
-    
-    console.log('Converted answers array:', answersArray);
-    
+    // Transform answers to API format
+    const transformedAnswers = transformAnswers(answers);
+    console.debug('Transformed answers:', transformedAnswers);
+
+    // Call prediction API
     const response = await fetch(ML_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ answers: answersArray }) // Send array, not object
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(transformedAnswers)
     });
-    
-    console.log('API Response status:', response.status);
-    
+
+    // Handle non-2xx responses
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('API Error response:', errorText);
-      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+      const errorData = await response.json().catch(() => ({}));
+      console.error('API Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorData
+      });
+      throw new Error(`API request failed with status ${response.status}`);
     }
-    
+
+    // Process successful response
     const result = await response.json();
-    console.log('API Response data:', result);
-    
-    // Extract final_class and confidence from the new response format
-    const { final_class, confidence } = result;
-    
-    if (!final_class) {
-      console.warn('No final_class found in response, using fallback');
-      throw new Error('Invalid response format from ML service');
+    console.debug('API Response:', result);
+
+    // Determine risk level based on final_class
+    switch (result.final_class) {
+      case 'Severe Depression':
+      case 'Moderate Depression':
+        return 'depressed';
+      case 'Mild Depression':
+      case 'No Depression':
+        return 'notDepressed';
+      default:
+        console.warn('Unknown final_class:', result.final_class);
+        return calculateFallbackRisk(answers);
     }
-    
-    console.log('Final class:', final_class, 'Confidence:', confidence);
-    
-    // Map the 4 depression classes to our binary format
-    // "Severe Depression", "Moderate Depression", "Mild Depression", "No Depression"
-    if (final_class === "Severe Depression" || final_class === "Moderate Depression") {
-      return "depressed";
-    } else if (final_class === "Mild Depression" || final_class === "No Depression") {
-      return "notDepressed";
-    } else {
-      console.warn('Unknown final_class:', final_class);
-      // Fallback to simple scoring
-      const score = Object.values(answers).reduce((sum, val) => sum + val, 0);
-      if (score <= 7) return 'notDepressed';
-      if (score <= 13) return 'depressed';
-      return 'depressed';
-    }
-    
+
   } catch (error) {
-    console.error('Error getting prediction:', error);
-    
-    // Enhanced fallback scoring with better logic
-    const score = Object.values(answers).reduce((sum, val) => sum + val, 0);
-    console.log('Fallback score calculation:', score);
-    
-    // More nuanced fallback based on score ranges
-    if (score <= 7) {
-      console.log('Fallback: Low score, returning notDepressed');
-      return 'notDepressed';
-    } else if (score <= 13) {
-      console.log('Fallback: Moderate score, returning depressed');
-      return 'depressed';
-    } else {
-      console.log('Fallback: High score, returning depressed');
-      return 'depressed';
-    }
+    console.error('Prediction error:', error);
+    return calculateFallbackRisk(answers);
   }
 };
 
-// New function to get detailed prediction results
+/**
+ * Gets detailed prediction results
+ * @param {Object} answers - User answers (0-1 for each question)
+ * @returns {Promise<Object>} - {final_class, confidence}
+ */
 export const getDetailedPrediction = async (answers) => {
   try {
-    console.log('Getting detailed prediction with answers:', answers);
-    
-    // Convert answers object to array in the correct order
-    const answersArray = Object.keys(answers)
-      .sort((a, b) => parseInt(a) - parseInt(b))
-      .map(key => answers[key]);
-    
+    // Transform answers to API format
+    const transformedAnswers = transformAnswers(answers);
+
     const response = await fetch(ML_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ answers: answersArray })
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(transformedAnswers)
     });
-    
+
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('API Error response:', errorText);
-      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        `API request failed: ${response.status} - ${JSON.stringify(errorData)}`
+      );
     }
-    
+
     const result = await response.json();
-    console.log('Detailed API Response:', result);
-    
-    // Return only final_class and confidence as requested
     return {
       final_class: result.final_class,
       confidence: result.confidence
     };
-    
+
   } catch (error) {
-    console.error('Error getting detailed prediction:', error);
-    throw error;
+    console.error('Detailed prediction error:', error);
+    throw error; // Re-throw for handling in calling component
   }
-}; 
+};
+
+/**
+ * Fallback calculation when API fails
+ * @param {Object} answers - User answers
+ * @returns {string} - Fallback risk determination
+ */
+const calculateFallbackRisk = (answers) => {
+  const score = Object.values(answers).reduce((sum, val) => sum + (val || 0), 0);
+  console.warn('Using fallback calculation with score:', score);
+  
+  // SRQ-20 scoring thresholds
+  if (score <= 7) return 'notDepressed';
+  if (score <= 13) return 'depressed'; // Moderate
+  return 'depressed'; // High
+};

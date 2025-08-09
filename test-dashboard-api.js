@@ -6,7 +6,7 @@ async function testDashboardAPI() {
     console.log('Testing dashboard API endpoint...');
     
     // First, let's test if the server is running
-    const response = await fetch('http://localhost:5000/api/dashboard/stats', {
+    const response = await fetch('https://depression-41o5.onrender.com/api/dashboard/stats', {
       headers: {
         'Authorization': 'Bearer test-token', // You'll need a valid token
         'Content-Type': 'application/json'

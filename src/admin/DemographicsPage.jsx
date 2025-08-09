@@ -50,7 +50,7 @@ const DemographicsPage = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/admin/demographics', {
+      const response = await fetch('https://depression-41o5.onrender.com/api/admin/demographics', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

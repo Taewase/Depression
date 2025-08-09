@@ -6,12 +6,13 @@ import {
   ChevronDown,
   Sun,
   Moon,
-  Menu
+  Menu,
+  Calendar
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../components/NotificationProvider';
 
-const AdminHeader = ({ pageName = "Dashboard", onMenuClick }) => {
+const AdminHeader = ({ pageName = "Dashboard", onMenuClick, selectedYear, selectedMonth, onYearChange, onMonthChange }) => {
   const { user, logout } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -32,7 +33,7 @@ const AdminHeader = ({ pageName = "Dashboard", onMenuClick }) => {
   const isDashboard = pageName === "Dashboard";
 
   return (
-    <header className="h-14 bg-white dark:bg-slate-900 lg:rounded-tr-2xl shadow-md border-b border-slate-200 dark:border-slate-700 fixed top-0 lg:left-64 left-0 right-0 z-30 flex items-center px-4 sm:px-6 lg:px-8 transition-all duration-300">
+    <header className="h-16 sm:h-20 bg-white dark:bg-slate-900 lg:rounded-tr-2xl shadow-md border-b border-slate-200 dark:border-slate-700 fixed top-0 lg:left-64 left-0 right-0 z-30 flex items-center px-4 sm:px-6 lg:px-8 transition-all duration-300">
       {/* Mobile menu button */}
       <button
         onClick={onMenuClick}
@@ -44,15 +45,42 @@ const AdminHeader = ({ pageName = "Dashboard", onMenuClick }) => {
       {/* Conditional Header Content */}
       <div className="flex-1">
         {isDashboard ? (
-          /* Search Bar for Dashboard */
-          <div className="max-w-md">
-            <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-300" />
-              <input
-                type="text"
-                placeholder="Search..."
-                className="w-full pl-10 pr-4 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 border-none focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-700 focus:outline-none text-sm placeholder-slate-400 dark:placeholder-slate-400"
-              />
+          /* Date Filter Controls for Dashboard */
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="hidden sm:flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Filter:</span>
+            </div>
+            
+            <div className="flex gap-1 sm:gap-2">
+              <select
+                value={selectedYear}
+                onChange={(e) => onYearChange && onYearChange(parseInt(e.target.value))}
+                className="px-2 sm:px-3 py-1 text-xs sm:text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value={2024}>2024</option>
+                <option value={2025}>2025</option>
+                <option value={2026}>2026</option>
+              </select>
+              
+              <select
+                value={selectedMonth}
+                onChange={(e) => onMonthChange && onMonthChange(parseInt(e.target.value))}
+                className="px-2 sm:px-3 py-1 text-xs sm:text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value={1}>Jan</option>
+                <option value={2}>Feb</option>
+                <option value={3}>Mar</option>
+                <option value={4}>Apr</option>
+                <option value={5}>May</option>
+                <option value={6}>Jun</option>
+                <option value={7}>Jul</option>
+                <option value={8}>Aug</option>
+                <option value={9}>Sep</option>
+                <option value={10}>Oct</option>
+                <option value={11}>Nov</option>
+                <option value={12}>Dec</option>
+              </select>
             </div>
           </div>
         ) : (

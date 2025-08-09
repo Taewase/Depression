@@ -49,7 +49,7 @@ const Users = () => {
       console.log('Frontend - Search term:', searchTerm);
       console.log('Frontend - Fetching users with params:', params.toString());
 
-      const response = await fetch(`http://localhost:5000/api/users?${params}`, {
+      const response = await fetch(`https://depression-41o5.onrender.com/api/users?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -76,7 +76,7 @@ const Users = () => {
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/users/stats', {
+      const response = await fetch('https://depression-41o5.onrender.com/api/users/stats', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -109,7 +109,7 @@ const Users = () => {
   const handleDeleteUser = async (userId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/users/${userId}`, {
+      const response = await fetch(`https://depression-41o5.onrender.com/api/users/${userId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -135,7 +135,7 @@ const Users = () => {
   const handleDeactivateUser = async (userId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/users/${userId}/deactivate`, {
+      const response = await fetch(`https://depression-41o5.onrender.com/api/users/${userId}/deactivate`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -160,7 +160,7 @@ const Users = () => {
   const handleMakeAdmin = async (userId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/users/${userId}/make-admin`, {
+      const response = await fetch(`https://depression-41o5.onrender.com/api/users/${userId}/make-admin`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -221,18 +221,16 @@ const Users = () => {
 
   // Remove stats, modals, and unnecessary actions. Redesign table as per new requirements.
   return (
-    <AdminLayout pageName="User Management">
+    <AdminLayout pageName="Users">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-1 mb-4">
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <UsersIcon className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
-            <span className="hidden sm:inline">User Management</span>
-            <span className="sm:hidden">Users</span>
+            User Management
           </h1>
           <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400">
-            <span className="hidden sm:inline">Manage user accounts, roles, and permissions</span>
-            <span className="sm:hidden">Manage user accounts</span>
+            Manage user accounts, roles, and permissions
           </p>
         </div>
 

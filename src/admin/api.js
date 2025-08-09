@@ -1,6 +1,6 @@
 // API utility functions for admin dashboard
 
-const API_BASE_URL = 'http://localhost:5000/api/admin';
+const API_BASE_URL = 'https://depression-41o5.onrender.com/api';
 
 // Helper function for API calls
 const apiCall = async (endpoint, options = {}) => {
@@ -26,8 +26,9 @@ const apiCall = async (endpoint, options = {}) => {
 };
 
 // Dashboard statistics
-export const getDashboardStats = async () => {
-  return apiCall('/stats');
+export const getDashboardStats = async (year, month) => {
+  const params = year && month ? `?year=${year}&month=${month}` : '';
+  return apiCall(`/dashboard/stats${params}`);
 };
 
 // Users data
@@ -35,8 +36,8 @@ export const getUsers = async (page = 1, limit = 10) => {
   return apiCall(`/users?page=${page}&limit=${limit}`);
 };
 
-export const getUsersCount = async () => {
-  return apiCall('/users/count');
+export const getUsersStats = async () => {
+  return apiCall('/users/stats');
 };
 
 // Assessments data
@@ -64,7 +65,7 @@ export const getRecentActivity = async () => {
 
 // Demographics data
 export const getDemographics = async () => {
-  return apiCall('/demographics');
+  return apiCall('/admin/demographics');
 };
 
 // Mock data for development (remove when backend is ready)
@@ -167,4 +168,4 @@ export const getMockRecentActivity = () => {
       ]);
     }, 800);
   });
-}; 
+};

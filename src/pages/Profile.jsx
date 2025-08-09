@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { User, Mail, Book, Edit, Shield, MapPin, Phone, Calendar, Save, X, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { User, Mail, Book, Edit, Shield, MapPin, Phone, Save, X, Eye, EyeOff, CheckCircle } from 'lucide-react';
 
 const Profile = () => {
   const { user, isAuthenticated, updateUserProfile, changePassword } = useAuth();
@@ -17,8 +17,7 @@ const Profile = () => {
     email: user?.email || '',
     phone: user?.phone || '+1234567890',
     address: user?.address || 'Lilongwe, Malawi',
-    role: user?.role || 'Guest',
-    joinDate: user?.joinDate || 'January 2024'
+    role: user?.role || 'Guest'
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -143,8 +142,7 @@ const Profile = () => {
       email: user?.email || '',
       phone: user?.phone || '+1234567890',
       address: user?.address || 'Lilongwe, Malawi',
-      role: user?.role || 'Guest',
-      joinDate: user?.joinDate || 'January 2024'
+      role: user?.role || 'Guest'
     });
     setErrors({});
   };
@@ -174,57 +172,110 @@ const Profile = () => {
       )}
 
       {/* Profile Header */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-8 flex items-center space-x-6 mb-8">
-        <div className="flex-shrink-0">
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center text-white text-4xl font-bold">
-            {user?.name?.charAt(0) || 'U'}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 sm:p-6 lg:p-8 mb-8">
+        {/* Mobile Layout */}
+        <div className="flex flex-col sm:hidden space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="flex-shrink-0">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center text-white text-2xl font-bold">
+                  {user?.name?.charAt(0) || 'U'}
+                </div>
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">{user?.name}</h1>
+                <p className="text-slate-600 dark:text-slate-300 text-sm">{user?.role}</p>
+              </div>
+            </div>
+            <div className="flex-shrink-0">
+              {!isEditing ? (
+                <button 
+                  onClick={() => setIsEditing(true)}
+                  className="flex items-center gap-1 px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm"
+                >
+                  <Edit size={14} />
+                  Edit
+                </button>
+              ) : (
+                <div className="flex gap-1">
+                  <button 
+                    onClick={handleSaveProfile}
+                    className="flex items-center gap-1 px-3 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+                  >
+                    <Save size={14} />
+                    Save
+                  </button>
+                  <button 
+                    onClick={cancelEdit}
+                    className="flex items-center gap-1 px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-        <div className="flex-grow">
-          <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">{user?.name}</h1>
-          <p className="text-slate-600 dark:text-slate-300 text-lg">{user?.role}</p>
-          <div className="flex items-center gap-4 mt-2 text-sm text-slate-500 dark:text-slate-400">
-            <div className="flex items-center gap-1">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
               <Mail size={14} />
-              {user?.email}
+              <span className="truncate">{user?.email}</span>
             </div>
-            <div className="flex items-center gap-1">
-              <MapPin size={14} />
-              {user?.address}
-            </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
               <Phone size={14} />
-              {user?.phone}
+              <span>{user?.phone}</span>
             </div>
           </div>
         </div>
-        <div className="ml-auto">
-          {!isEditing ? (
-            <button 
-              onClick={() => setIsEditing(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-            >
-              <Edit size={16} />
-              Edit Profile
-            </button>
-          ) : (
-            <div className="flex gap-2">
+
+        {/* Desktop Layout */}
+        <div className="hidden sm:flex items-center space-x-6">
+          <div className="flex-shrink-0">
+            <div className="w-20 h-20 lg:w-24 lg:h-24 rounded-full bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center text-white text-3xl lg:text-4xl font-bold">
+              {user?.name?.charAt(0) || 'U'}
+            </div>
+          </div>
+          <div className="flex-grow">
+            <h1 className="text-2xl lg:text-3xl font-bold text-slate-800 dark:text-slate-100">{user?.name}</h1>
+            <p className="text-slate-600 dark:text-slate-300 text-base lg:text-lg">{user?.role}</p>
+            <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-slate-500 dark:text-slate-400">
+              <div className="flex items-center gap-1">
+                <Mail size={14} />
+                <span className="truncate">{user?.email}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Phone size={14} />
+                {user?.phone}
+              </div>
+            </div>
+          </div>
+          <div className="ml-auto flex-shrink-0">
+            {!isEditing ? (
               <button 
-                onClick={handleSaveProfile}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors"
-              >
-                <Save size={16} />
-                Save
-              </button>
-              <button 
-                onClick={cancelEdit}
+                onClick={() => setIsEditing(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
               >
-                <X size={16} />
-                Cancel
+                <Edit size={16} />
+                Edit Profile
               </button>
-            </div>
-          )}
+            ) : (
+              <div className="flex gap-2">
+                <button 
+                  onClick={handleSaveProfile}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors"
+                >
+                  <Save size={16} />
+                  Save
+                </button>
+                <button 
+                  onClick={cancelEdit}
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                >
+                  <X size={16} />
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -306,14 +357,6 @@ const Profile = () => {
                 <p className="font-semibold text-slate-700 dark:text-slate-200">{user?.address}</p>
               )}
               {errors.address && <p className="text-red-500 text-xs mt-1">{errors.address}</p>}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-700 p-4 rounded-lg">
-            <Calendar size={20} className="text-indigo-500" />
-            <div className="flex-grow">
-              <p className="text-sm text-slate-500 dark:text-slate-400">Member Since</p>
-              <p className="font-semibold text-slate-700 dark:text-slate-200">{user?.joinDate || 'January 2024'}</p>
             </div>
           </div>
 

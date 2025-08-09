@@ -67,7 +67,7 @@ const AssessmentPage = () => {
         gender: selectedGender
       });
 
-      const response = await fetch(`http://localhost:5000/api/assessments?${params}`, {
+      const response = await fetch(`https://depression-41o5.onrender.com/api/assessments?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -111,7 +111,7 @@ const AssessmentPage = () => {
       setLoadingUserDetails(true);
       const token = localStorage.getItem('token');
       
-      const response = await fetch(`http://localhost:5000/api/assessments/user/${userId}`, {
+      const response = await fetch(`https://depression-41o5.onrender.com/api/assessments/user/${userId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -143,7 +143,7 @@ const AssessmentPage = () => {
     try {
       const token = localStorage.getItem('token');
       
-      const response = await fetch(`http://localhost:5000/api/assessments/${assessment.id}/download`, {
+      const response = await fetch(`https://depression-41o5.onrender.com/api/assessments/${assessment.id}/download`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -177,7 +177,7 @@ const AssessmentPage = () => {
         gender: selectedGender
       });
 
-      const response = await fetch(`http://localhost:5000/api/assessments/export?${params}`, {
+      const response = await fetch(`https://depression-41o5.onrender.com/api/assessments/export?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -233,7 +233,7 @@ const AssessmentPage = () => {
 
   if (loading) {
     return (
-      <AdminLayout pageName="Assessment Results">
+      <AdminLayout pageName="Assessments">
         <div className="flex items-center justify-center h-64">
           <div className="text-slate-600 dark:text-slate-400">Loading assessments...</div>
         </div>
@@ -243,7 +243,7 @@ const AssessmentPage = () => {
 
   if (error) {
     return (
-      <AdminLayout pageName="Assessment Results">
+      <AdminLayout pageName="Assessments">
         <div className="flex items-center justify-center h-64">
           <div className="text-red-600 dark:text-red-400">{error}</div>
         </div>
@@ -252,14 +252,18 @@ const AssessmentPage = () => {
   }
 
   return (
-    <AdminLayout pageName="Assessment Results">
+    <AdminLayout pageName="Assessments">
       <div className="space-y-6">
         {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
-            <span className="hidden sm:inline">Assessment Results</span>
-            <span className="sm:hidden">Assessments</span>
-          </h1>
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
+              Assessment Results
+            </h1>
+            <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 mt-1">
+              View and manage user assessment data and results
+            </p>
+          </div>
           <button
             onClick={handleExportAll}
             className="flex items-center justify-center px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base"
